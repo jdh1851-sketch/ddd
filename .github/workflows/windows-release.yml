@@ -25,19 +25,20 @@ jobs:
           if ($LASTEXITCODE) { throw 'Python dependencies failed' }
           choco install tesseract --yes --no-progress
           if ($LASTEXITCODE -notin 0, 3010) { throw 'Tesseract install failed' }
-          if (!(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
-            choco install innosetup --yes --no-progress
-            if ($LASTEXITCODE -notin 0, 3010) { throw 'Inno Setup install failed' }
-          }
       - name: Tests
         run: python -m pytest pc/tests -q
-      - name: Build portable ZIP and installer; verify packaged UI
+      - name: Build single EXE; verify isolated UI and bundled OCR
         shell: pwsh
         run: pc/packaging/build_release.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: Kkullim-PC-Windows-x64
           path: pc/release/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-UI-check
+          path: pc/ui-check/*
           if-no-files-found: error
       - name: Publish downloadable release
         shell: pwsh
@@ -46,7 +47,7 @@ jobs:
         run: |
           $tag = "pc-v0.10.0-build.${{ github.run_number }}"
           @'
-          Windows x64 executable distribution. Download the Setup EXE, or extract the complete portable ZIP and run Kkullim.exe. Python and OCR runtime are included. Both UI tabs were initialized by a packaged smoke test; actual game input needs validation. The low-quality cancel key must be checked in-game.
+          Windows x64 single-file application. Download Kkullim-PC-0.10.0.exe and double-click it. No installer, adjacent _internal folder, Python installation or OCR installation is required. Both UI tabs and the embedded OCR runtime passed a smoke test with only this EXE copied into an empty folder. Actual game input and the low-quality cancel key still need in-game validation.
           '@ | Set-Content release-notes.txt -Encoding utf8
           gh release create $tag pc/release/* --target '${{ github.sha }}' --title "Kkullim PC 0.10.0 (build ${{ github.run_number }})" --notes-file release-notes.txt
           if ($LASTEXITCODE) { throw 'Release publication failed' }
