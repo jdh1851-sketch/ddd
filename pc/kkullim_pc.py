@@ -317,20 +317,25 @@ class App:
         self.pending=(key,now);self.delay=now+1.2;self.last_progress=now;self.stable=0
 
 if __name__=='__main__':
-    app=App()
-    if '--selftest' in sys.argv:
-        app.root.withdraw();app.root.update()
-        from fishing import KoreanOCR
-        packaged_ocr=KoreanOCR()
-        assert packaged_ocr.api.get_tesseract_version()
-        assert len(app.tabs.tabs())==2
-        app.tabs.select(1);app.root.update();assert app.is_fishing()
-        assert all(v.get() for v in app.fishing.keep.values())
-        app.tabs.select(0);app.root.update();assert not app.is_fishing()
-        for var,label in app.option_states:
-            assert not var.get() and label.cget('text')=='사용 안 함'
-            var.set(True);assert label.cget('text')=='사용 중'
-            var.set(False);assert label.cget('text')=='사용 안 함'
-        (HOME/'selftest.txt').write_text('OK: GUI tabs, bundled OCR runtime, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
-        app.fishing.close();app.root.destroy()
-    else:app.root.mainloop()
+    try:
+        app=App()
+        if '--selftest' in sys.argv:
+            app.root.withdraw();app.root.update()
+            from fishing import KoreanOCR
+            packaged_ocr=KoreanOCR()
+            assert packaged_ocr.api.get_tesseract_version()
+            assert len(app.tabs.tabs())==2
+            app.tabs.select(1);app.root.update();assert app.is_fishing()
+            assert all(v.get() for v in app.fishing.keep.values())
+            app.tabs.select(0);app.root.update();assert not app.is_fishing()
+            for var,label in app.option_states:
+                assert not var.get() and label.cget('text')=='사용 안 함'
+                var.set(True);assert label.cget('text')=='사용 중'
+                var.set(False);assert label.cget('text')=='사용 안 함'
+            (HOME/'selftest.txt').write_text('OK: GUI tabs, bundled OCR runtime, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
+            app.fishing.close();app.root.destroy()
+        else:app.root.mainloop()
+    except Exception:
+        logging.exception('프로그램 초기화 오류')
+        if '--selftest' in sys.argv:sys.exit(1)
+        raise
