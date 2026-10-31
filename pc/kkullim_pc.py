@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from PIL import ImageGrab, Image, ImageTk
 from fishing_ui import FishingPanel
+from scan_async import LatestScan
 
 BASE = pathlib.Path(getattr(sys, '_MEIPASS', pathlib.Path(__file__).parent))
 HOME = pathlib.Path(sys.executable).parent if getattr(sys, 'frozen', False) else pathlib.Path(__file__).parent
@@ -49,11 +50,14 @@ class Detector:
         hh,ww=v.shape
         self.variants['compass']=[cv2.warpAffine(v,cv2.getRotationMatrix2D((ww/2,hh/2),a,1),(ww,hh)) for a in range(0,360,15)]
         self.variants['break']=[cv2.threshold(self.templates['break'],210,255,cv2.THRESH_BINARY)[1]]
-    def scan(self, rgb):
+    def capture(self, bbox, enabled):
+        return self.scan(ImageGrab.grab(bbox=bbox,all_screens=True),enabled)
+    def scan(self, rgb, enabled=None):
         frame=cv2.resize(np.array(rgb),(1660,1024))
         gray=cv2.cvtColor(frame,cv2.COLOR_RGB2GRAY)
         hits={}
         for k,cfg in self.cfg.items():
+            if enabled is not None and k not in enabled:continue
             x,y,w,h=cfg['roi']; patch=gray[y:y+h,x:x+w]
             if k in ('compass','break'):patch=cv2.threshold(patch,210,255,cv2.THRESH_BINARY)[1]
             score=-1; pos=None
@@ -86,6 +90,7 @@ class App:
         style.map('Start.TButton',background=[('active','#2056b9')])
         style.configure('Stop.TButton',background='#be384b',foreground='white')
         style.map('Stop.TButton',background=[('active','#a52d40')])
+        self.vision=LatestScan();self.scan_after=0
         self.det=Detector();self.running=False;self.state='ready';self.count=0;self.pending=None;self.last_progress=time.monotonic();self.delay=0
         self.mode=tk.StringVar(value='observe');self.limit=tk.StringVar(value='1');self.threshold=tk.StringVar(value='0.84');self.timeout=tk.StringVar(value='15')
         self.status=tk.StringVar(value='중지됨 · 게임을 준비한 뒤 시작해 주세요.')
@@ -172,7 +177,7 @@ class App:
     def tab_changed(self,event=None):
         if self.running:self.stop('탭 변경 · 일시정지')
     def close(self):
-        self.stop('종료');self.fishing.close();self.root.destroy()
+        self.stop('종료');self.vision.close();self.fishing.close();self.root.destroy()
     def reset(self):
         if self.running:return
         if self.is_fishing():
@@ -180,7 +185,7 @@ class App:
         self.state='ready';self.count=0;self.pending=None;self.candidate=None;self.stable=0;self.food_used=False
         self.status.set('회차 초기화 완료. 입장 화면 또는 던전 시작 화면에서 시작하세요.')
     def stop(self,msg):
-        self.running=False;self.fishing.stopped();self.status.set(msg);logging.info(msg)
+        self.running=False;self.vision.reset();self.fishing.stopped();self.status.set(msg);logging.info(msg)
     def toggle(self):
         if self.running:self.stop('일시정지');return
         if self.is_fishing():
@@ -214,7 +219,7 @@ class App:
             if self.running:self.step()
         except Exception as e:
             logging.exception('실행 오류');self.stop('오류로 정지: '+str(e))
-        self.root.after(50 if self.is_fishing() else 350,self.tick)
+        self.root.after(50,self.tick)
     def fishing_key(self,vk):
         if not self.running or not self.is_fishing() or u.GetForegroundWindow()!=self.hwnd or u.IsIconic(self.hwnd):return False
         scan=0x01 if vk==0x1B else 0x39
@@ -228,14 +233,23 @@ class App:
         if not u.IsWindow(self.hwnd):self.stop('게임 창이 닫혀 정지했습니다.');return
         if now-self.last_progress>self.wait:self.stop('진행 제한 시간을 초과해 정지했습니다. 화면을 확인하세요.');return
         if u.GetForegroundWindow()!=self.hwnd or u.IsIconic(self.hwnd):
+            self.vision.reset()
             if self.is_fishing():self.fishing.lost_focus()
             self.status.set('대기: 게임 창을 맨 앞으로 가져오세요.');return
         x,y,w,h=rect(self.hwnd)
         if w<640 or h<400:self.stop('게임 창이 너무 작습니다.');return
-        rgb=ImageGrab.grab(bbox=(x,y,x+w,y+h),all_screens=True)
         if self.is_fishing():
+            rgb=ImageGrab.grab(bbox=(x,y,x+w,y+h),all_screens=True)
             self.fishing.step(np.array(rgb),now,self.fishing_key);return
-        frame,hits=self.det.scan(rgb)
+        result=self.vision.poll()
+        if result is None:
+            if now>=self.scan_after:
+                enabled=set(self.det.cfg)
+                if not self.food.get():enabled.discard('food')
+                if not self.break_skill.get():enabled.discard('break')
+                if self.vision.submit(self.det.capture,(x,y,x+w,y+h),enabled):self.scan_after=now+.35
+            return
+        frame,hits=result
         valid={k:v for k,v in hits.items() if v[0]>=self.th}
         for k,(score,pos) in valid.items():
             px,py=map(int,pos);cv2.rectangle(frame,(px-45,py-20),(px+45,py+20),(255,80,0),3)
@@ -320,20 +334,33 @@ if __name__=='__main__':
     try:
         app=App()
         if '--selftest' in sys.argv:
-            app.root.withdraw();app.root.update()
+            app.root.geometry('1000x740+10+10');app.root.update()
             from fishing import KoreanOCR
             packaged_ocr=KoreanOCR()
             assert packaged_ocr.api.get_tesseract_version()
             assert len(app.tabs.tabs())==2
-            app.tabs.select(1);app.root.update();assert app.is_fishing()
+            from threading import Event
+            busy=Event();app.vision.submit(lambda:busy.wait(5))
+            timings=[]
+            try:
+                for index in (1,0,1,0):
+                    started=time.perf_counter();app.tabs.select(index);app.root.update()
+                    timings.append((time.perf_counter()-started)*1000)
+                assert max(timings)<750, f'Tab switching blocked: {timings}'
+                assert not app.vision.future[0].done(), 'Simulated vision task must still be busy'
+            finally:busy.set()
             assert all(v.get() for v in app.fishing.keep.values())
-            app.tabs.select(0);app.root.update();assert not app.is_fishing()
+            (HOME/'selftest-ui.json').write_text(json.dumps({'tab_switch_ms':timings,'vision_busy_during_switch':True}),encoding='utf-8')
+            for index,name in ((1,'fishing'),(0,'abyss')):
+                app.tabs.select(index);app.root.update();time.sleep(.15);app.root.update()
+                x,y=app.root.winfo_rootx(),app.root.winfo_rooty()
+                ImageGrab.grab(bbox=(x,y,x+app.root.winfo_width(),y+app.root.winfo_height())).save(HOME/f'preview-{name}.png')
             for var,label in app.option_states:
                 assert not var.get() and label.cget('text')=='사용 안 함'
                 var.set(True);assert label.cget('text')=='사용 중'
                 var.set(False);assert label.cget('text')=='사용 안 함'
             (HOME/'selftest.txt').write_text('OK: GUI tabs, bundled OCR runtime, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
-            app.fishing.close();app.root.destroy()
+            app.vision.close();app.fishing.close();app.root.destroy()
         else:app.root.mainloop()
     except Exception:
         logging.exception('프로그램 초기화 오류')
