@@ -6,9 +6,11 @@ from tkinter import ttk, messagebox
 import cv2
 import numpy as np
 from PIL import ImageGrab, Image, ImageTk
+from fishing_ui import FishingPanel
 
 BASE = pathlib.Path(getattr(sys, '_MEIPASS', pathlib.Path(__file__).parent))
 HOME = pathlib.Path(sys.executable).parent if getattr(sys, 'frozen', False) else pathlib.Path(__file__).parent
+ASSETS = BASE if (BASE/'templates').exists() else BASE.parent/'assets'
 u = C.windll.user32
 try: C.windll.shcore.SetProcessDpiAwareness(2)
 except Exception: u.SetProcessDPIAware()
@@ -38,11 +40,11 @@ def rect(h):
 
 class Detector:
     def __init__(self):
-        self.cfg=json.loads((BASE/'templates/config.json').read_text(encoding='utf-8'))
-        self.templates={k:cv2.imdecode(np.fromfile(str(BASE/'templates'/f'{k}.png'),dtype=np.uint8),0) for k in self.cfg}
+        self.cfg=json.loads((ASSETS/'templates/config.json').read_text(encoding='utf-8'))
+        self.templates={k:cv2.imdecode(np.fromfile(str(ASSETS/'templates'/f'{k}.png'),dtype=np.uint8),0) for k in self.cfg}
         self.variants={k:[v] for k,v in self.templates.items()}
         for k in ('touch','compass'):
-            self.variants[k]=[cv2.imdecode(np.fromfile(str(p),dtype=np.uint8),0) for p in sorted((BASE/'templates').glob(k+'*.png'))]
+            self.variants[k]=[cv2.imdecode(np.fromfile(str(p),dtype=np.uint8),0) for p in sorted((ASSETS/'templates').glob(k+'*.png'))]
         v=cv2.threshold(self.templates['compass'],210,255,cv2.THRESH_BINARY)[1]
         hh,ww=v.shape
         self.variants['compass']=[cv2.warpAffine(v,cv2.getRotationMatrix2D((ww/2,hh/2),a,1),(ww,hh)) for a in range(0,360,15)]
@@ -66,8 +68,9 @@ class Detector:
 
 class App:
     def __init__(self):
-        self.root=tk.Tk();self.root.title('끌림 매크로 v0.9');self.root.iconbitmap(str(BASE/'app_icon.ico'))
-        self.root.geometry(f'900x{min(1100,self.root.winfo_screenheight()-100)}');self.root.minsize(820,650)
+        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10');self.root.iconbitmap(str(BASE/'app_icon.ico'))
+        self.user32=u;self.find_game=game_window;self.window_rect=rect
+        self.root.geometry(f'1000x{min(1100,self.root.winfo_screenheight()-100)}');self.root.minsize(820,650)
         self.root.configure(bg='#f2f5fa');self.root.option_add('*Font',('맑은 고딕',12))
         style=ttk.Style();style.theme_use('clam')
         style.configure('.',font=('맑은 고딕',12),background='#ffffff',foreground='#24334a')
@@ -77,6 +80,8 @@ class App:
         style.configure('TCheckbutton',font=('맑은 고딕',13),background='#ffffff',padding=8)
         style.configure('TEntry',padding=6)
         style.configure('TButton',font=('맑은 고딕',12,'bold'),padding=(12,12))
+        style.configure('TNotebook.Tab',font=('맑은 고딕',14,'bold'),padding=(24,12))
+        style.map('TNotebook.Tab',background=[('selected','#dbeafe')],foreground=[('selected','#1764dc')])
         style.configure('Start.TButton',background='#2866d8',foreground='white')
         style.map('Start.TButton',background=[('active','#2056b9')])
         style.configure('Stop.TButton',background='#be384b',foreground='white')
@@ -91,13 +96,20 @@ class App:
         ttk.Button(actions,text='즉시정지  F9',style='Stop.TButton',command=lambda:self.stop('사용자 정지')).pack(side='left',padx=(0,8))
         ttk.Button(actions,text='회차 초기화',command=self.reset).pack(side='left')
         tk.Label(footer,textvariable=self.status,bg='#f2f5fa',fg='#52637c',anchor='w',justify='left',wraplength=810,font=('맑은 고딕',11)).pack(fill='x',pady=(9,0))
-        canvas=tk.Canvas(self.root,bg='#f2f5fa',highlightthickness=0)
-        scroll=ttk.Scrollbar(self.root,orient='vertical',command=canvas.yview);scroll.pack(side='right',fill='y');canvas.pack(fill='both',expand=True)
+        self.tabs=ttk.Notebook(self.root);self.tabs.pack(fill='both',expand=True)
+        abyss_page=ttk.Frame(self.tabs);fishing_page=ttk.Frame(self.tabs)
+        self.tabs.add(abyss_page,text='  어비스  ');self.tabs.add(fishing_page,text='  낚시  ')
+        self.fishing=FishingPanel(fishing_page,self,HOME)
+        self.tabs.bind('<<NotebookTabChanged>>',self.tab_changed)
+        self.root.protocol('WM_DELETE_WINDOW',self.close)
+        canvas=tk.Canvas(abyss_page,bg='#f2f5fa',highlightthickness=0)
+        self.abyss_canvas=canvas
+        scroll=ttk.Scrollbar(abyss_page,orient='vertical',command=canvas.yview);scroll.pack(side='right',fill='y');canvas.pack(fill='both',expand=True)
         canvas.configure(yscrollcommand=scroll.set)
         body=tk.Frame(canvas,bg='#f2f5fa');window=canvas.create_window((0,0),window=body,anchor='nw')
         body.bind('<Configure>',lambda e:canvas.configure(scrollregion=canvas.bbox('all')))
         canvas.bind('<Configure>',lambda e:canvas.itemconfigure(window,width=e.width))
-        self.root.bind('<MouseWheel>',lambda e:canvas.yview_scroll(-int(e.delta/120),'units'))
+        self.root.bind('<MouseWheel>',self.scroll_page)
         tk.Label(body,text='끌림 매크로',font=('맑은 고딕',24,'bold'),bg='#f2f5fa',fg='#24334a').pack(anchor='w',padx=24,pady=(16,2))
         tk.Label(body,text='우연한 만남 · 파티 입장 및 재도전',font=('맑은 고딕',12),bg='#f2f5fa',fg='#64748b').pack(anchor='w',padx=26,pady=(0,14))
         banner=tk.Frame(body,bg='#172b4d',padx=18,pady=13);banner.pack(fill='x',padx=22)
@@ -152,14 +164,34 @@ class App:
         ttk.Label(row,text='기본 0.84 · 인식 확인은 첫 사용 시 권장',foreground='#64748b',font=('맑은 고딕',10)).pack(side='left')
         self.keys={};self.candidate=None;self.stable=0
         self.root.after(250,self.tick)
+    def scroll_page(self,event):
+        canvas=self.fishing.canvas if self.is_fishing() else self.abyss_canvas
+        canvas.yview_scroll(-int(event.delta/120),'units')
+    def is_fishing(self):
+        return self.tabs.index(self.tabs.select())==1
+    def tab_changed(self,event=None):
+        if self.running:self.stop('탭 변경 · 일시정지')
+    def close(self):
+        self.stop('종료');self.fishing.close();self.root.destroy()
     def reset(self):
         if self.running:return
+        if self.is_fishing():
+            self.fishing.reset();self.status.set('낚시 회차 초기화 완료.');return
         self.state='ready';self.count=0;self.pending=None;self.candidate=None;self.stable=0;self.food_used=False
         self.status.set('회차 초기화 완료. 입장 화면 또는 던전 시작 화면에서 시작하세요.')
     def stop(self,msg):
-        self.running=False;self.status.set(msg);logging.info(msg)
+        self.running=False;self.fishing.stopped();self.status.set(msg);logging.info(msg)
     def toggle(self):
         if self.running:self.stop('일시정지');return
+        if self.is_fishing():
+            self.hwnd=game_window()
+            if not self.hwnd:messagebox.showerror('게임 창','마비노기 모바일 창을 찾지 못했습니다.');return
+            try:self.fishing.start(rect(self.hwnd)[2:])
+            except (ValueError, ImportError, OSError) as exc:
+                messagebox.showerror('낚시 설정',str(exc));return
+            self.wait=self.fishing.wait
+            self.running=True;self.last_progress=time.monotonic();self.delay=self.last_progress+3
+            self.status.set('3초 후 낚시 시작 · 게임 창을 맨 앞으로 가져오세요.');return
         try:
             self.maxruns=int(self.limit.get());self.th=float(self.threshold.get());self.wait=float(self.timeout.get())*60
             if self.maxruns<0 or not .6<=self.th<=.99 or self.wait<60:raise ValueError()
@@ -182,17 +214,27 @@ class App:
             if self.running:self.step()
         except Exception as e:
             logging.exception('실행 오류');self.stop('오류로 정지: '+str(e))
-        self.root.after(350,self.tick)
+        self.root.after(50 if self.is_fishing() else 350,self.tick)
+    def fishing_key(self,vk):
+        if not self.running or not self.is_fishing() or u.GetForegroundWindow()!=self.hwnd or u.IsIconic(self.hwnd):return False
+        scan=0x01 if vk==0x1B else 0x39
+        u.keybd_event(vk,scan,0,0)
+        try:time.sleep(.04)
+        finally:u.keybd_event(vk,scan,2,0)
+        return True
     def step(self):
         now=time.monotonic()
         if now<self.delay:return
         if not u.IsWindow(self.hwnd):self.stop('게임 창이 닫혀 정지했습니다.');return
         if now-self.last_progress>self.wait:self.stop('진행 제한 시간을 초과해 정지했습니다. 화면을 확인하세요.');return
         if u.GetForegroundWindow()!=self.hwnd or u.IsIconic(self.hwnd):
+            if self.is_fishing():self.fishing.lost_focus()
             self.status.set('대기: 게임 창을 맨 앞으로 가져오세요.');return
         x,y,w,h=rect(self.hwnd)
         if w<640 or h<400:self.stop('게임 창이 너무 작습니다.');return
         rgb=ImageGrab.grab(bbox=(x,y,x+w,y+h),all_screens=True)
+        if self.is_fishing():
+            self.fishing.step(np.array(rgb),now,self.fishing_key);return
         frame,hits=self.det.scan(rgb)
         valid={k:v for k,v in hits.items() if v[0]>=self.th}
         for k,(score,pos) in valid.items():
@@ -278,10 +320,14 @@ if __name__=='__main__':
     app=App()
     if '--selftest' in sys.argv:
         app.root.withdraw();app.root.update()
+        assert len(app.tabs.tabs())==2
+        app.tabs.select(1);app.root.update();assert app.is_fishing()
+        assert all(v.get() for v in app.fishing.keep.values())
+        app.tabs.select(0);app.root.update();assert not app.is_fishing()
         for var,label in app.option_states:
             assert not var.get() and label.cget('text')=='사용 안 함'
             var.set(True);assert label.cget('text')=='사용 중'
             var.set(False);assert label.cget('text')=='사용 안 함'
         (HOME/'selftest.txt').write_text('OK: GUI, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
-        app.root.destroy()
+        app.fishing.close();app.root.destroy()
     else:app.root.mainloop()
