@@ -8,7 +8,12 @@ if (!(Test-Path "$ocr\tesseract.exe")) { throw 'Build machine needs Tesseract-OC
 # Collect the entire OCR runtime, including dependent DLLs, into the portable app.
 python -m PyInstaller --noconfirm --clean --onedir --windowed --name Kkullim --icon app_icon.ico --add-data 'app_icon.ico;.' --add-data '..\assets\templates;templates' --add-data 'tessdata;tessdata' --add-data "$ocr;ocr" kkullim_pc.py
 if ($LASTEXITCODE) { throw 'PyInstaller failed' }
-$process = Start-Process -FilePath '.\dist\Kkullim\Kkullim.exe' -ArgumentList '--selftest' -Wait -PassThru
+$process = Start-Process -FilePath '.\dist\Kkullim\Kkullim.exe' -ArgumentList '--selftest' -PassThru
+if (!$process.WaitForExit(90000)) {
+    Stop-Process -Id $process.Id -Force
+    throw 'Packaged application selftest timed out'
+}
+$process.Refresh()
 if ($process.ExitCode -ne 0 -or !(Test-Path 'dist\Kkullim\selftest.txt')) { throw 'Packaged application selftest failed' }
 Remove-Item 'dist\Kkullim\selftest.txt'
 Copy-Item 'packaging\START_HERE.txt' 'dist\Kkullim\START_HERE.txt'
