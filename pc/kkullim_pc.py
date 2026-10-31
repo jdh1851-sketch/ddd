@@ -320,6 +320,9 @@ if __name__=='__main__':
     app=App()
     if '--selftest' in sys.argv:
         app.root.withdraw();app.root.update()
+        from fishing import KoreanOCR
+        packaged_ocr=KoreanOCR()
+        assert packaged_ocr.api.get_tesseract_version()
         assert len(app.tabs.tabs())==2
         app.tabs.select(1);app.root.update();assert app.is_fishing()
         assert all(v.get() for v in app.fishing.keep.values())
@@ -328,6 +331,6 @@ if __name__=='__main__':
             assert not var.get() and label.cget('text')=='사용 안 함'
             var.set(True);assert label.cget('text')=='사용 중'
             var.set(False);assert label.cget('text')=='사용 안 함'
-        (HOME/'selftest.txt').write_text('OK: GUI, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
+        (HOME/'selftest.txt').write_text('OK: GUI tabs, bundled OCR runtime, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
         app.fishing.close();app.root.destroy()
     else:app.root.mainloop()
