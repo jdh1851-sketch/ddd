@@ -1,0 +1,10 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+pc/build/
+pc/dist/
+pc/*.spec
+pc/*.log
+pc/fishing_settings.json
+pc/fishing_idle.png
+pc/selftest.txt
