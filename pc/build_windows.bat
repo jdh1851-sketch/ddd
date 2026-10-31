@@ -6,5 +6,5 @@ py -m pytest tests -q
 if errorlevel 1 exit /b 1
 powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_release.ps1
 if errorlevel 1 exit /b 1
-echo Portable ZIP and Setup EXE are in the release folder.
+echo Single portable EXE is in the release folder.
 pause
