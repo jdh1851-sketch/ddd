@@ -1,0 +1,55 @@
+{
+  "reference_version": "PC v0.12",
+  "defaults": {
+    "party_mode": "1인",
+    "four_person_role": "파티장",
+    "target_dungeon": "허상의 정박지",
+    "mode": "observe",
+    "food": false,
+    "break_skill": false,
+    "completion_limit": 1
+  },
+  "party_routes": {
+    "solo": "retry",
+    "fixed_2_or_3": "other_dungeon -> configured_dungeon -> enter",
+    "fixed_4_leader": "retry",
+    "fixed_4_member": "wait -> partyready; never retry or enter"
+  },
+  "timing_seconds": {
+    "poll_interval_excluding_processing": 0.35,
+    "press_duration": 0.12,
+    "post_input_delay": 1.2,
+    "transition_timeout": 30,
+    "no_progress_timeout": 900,
+    "resize_stability": 1,
+    "food_min_interval": 10,
+    "break_min_interval": 2
+  },
+  "consecutive_frames": {
+    "normal_action": 2,
+    "result_count": 2,
+    "food_present": 2,
+    "food_absent_rearm": 4,
+    "break_absent_rearm": 2
+  },
+  "recognition": {
+    "normalized_size": [
+      1660,
+      1024
+    ],
+    "threshold": 0.84,
+    "method": "TM_CCOEFF_NORMED",
+    "window_low_limit_not_accuracy_guarantee": [
+      320,
+      200
+    ]
+  },
+  "critical_guards": [
+    "partycancel -> no action",
+    "challenge requires title and button",
+    "dungeon list requires at least two title detections",
+    "same completion counted once until new gameplay observed",
+    "recover from current screen, not old ALLOWED table",
+    "four-person member never initiates entry or retry"
+  ]
+}
