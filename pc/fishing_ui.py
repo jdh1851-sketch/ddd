@@ -90,7 +90,7 @@ class FishingPanel:
         ttk.Label(row,text='Tesseract 경로').pack(side='left',padx=(0,8))
         ttk.Entry(row,textvariable=self.tesseract).pack(side='left',fill='x',expand=True)
         ttk.Button(row,text='찾기',command=self.browse_ocr).pack(side='left',padx=(6,0))
-        ttk.Label(settings,text='Tesseract 설치 필요 · 한국어 인식 데이터 포함 · 기본 경로 자동 검색',foreground='#64748b').pack(anchor='w',pady=4)
+        ttk.Label(settings,text='배포본은 OCR 포함 · 기본 경로 자동 검색 · 직접 지정은 선택 사항',foreground='#64748b').pack(anchor='w',pady=4)
         ttk.Label(self.body,textvariable=self.counter,background=BG,font=('맑은 고딕',13,'bold')).pack(anchor='w',padx=24,pady=(0,12))
         self.load()
 
