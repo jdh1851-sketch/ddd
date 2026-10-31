@@ -60,43 +60,59 @@ class FishingPanel:
         banner = tk.Frame(self.body, bg='#172b4d', padx=16, pady=12); banner.pack(fill='x', padx=22, pady=(0,12))
         tk.Label(banner, text='F8 시작 / 일시정지     F9 즉시정지', bg='#172b4d', fg='white', font=('맑은 고딕',16,'bold')).pack(anchor='w')
         tk.Label(banner, text='수동 낚시 모드 · 게임 창이 맨 앞일 때만 작동합니다.', bg='#172b4d', fg='#dbeafe').pack(anchor='w')
-        modes = self.card('1   실행 모드')
-        for label, value in [('인식만 확인 (입력 없음)', 'observe'), ('실제 실행', 'click')]:
-            ttk.Radiobutton(modes, text=label, variable=self.mode, value=value, command=self.changed).pack(side='left', padx=(0,16))
-        screen = self.card('2   화면 인식')
-        self.preview = tk.Label(screen, text='시작하면 게임 화면이 표시됩니다.', bg='#eaf0f8', fg='#64748b', height=5)
-        self.preview.pack(fill='x', pady=(0,8))
-        ttk.Label(screen, textvariable=self.message, wraplength=730).pack(anchor='w')
-        ttk.Label(screen, textvariable=self.state).pack(anchor='w', pady=4)
-        ttk.Label(screen, textvariable=self.calibration, foreground='#64748b', wraplength=730).pack(anchor='w')
-        row = ttk.Frame(screen); row.pack(fill='x', pady=(8,0))
-        for key, title in [('message','문구 영역'), ('gauge','게이지 영역'), ('button','시작 버튼')]:
-            ttk.Button(row, text=title+' 지정', command=lambda k=key: self.calibrate(k)).pack(side='left', padx=(0,6))
-        rules = self.card('3   낚기 조건')
-        grid = ttk.Frame(rules); grid.pack(fill='x')
-        for i, key in enumerate(('heavy','lucky','float','bite')):
-            ttk.Checkbutton(grid, text=PHRASES[key], variable=self.keep[key], command=self.changed).grid(row=i//2, column=i%2, sticky='w', padx=(0,40))
-        ttk.Label(rules, text='반응이 왔다 / 뭔가 걸렸다    →    취소', foreground='#64748b').pack(anchor='w', pady=(8,0))
-        settings = self.card('4   반복 설정')
-        row = ttk.Frame(settings); row.pack(fill='x')
-        ttk.Label(row,text='성공 횟수').pack(side='left'); ttk.Entry(row,textvariable=self.limit,width=5).pack(side='left',padx=8)
-        ttk.Label(row,text='0 = 무제한').pack(side='left',padx=(0,20))
-        ttk.Label(row,text='진행 없으면 정지').pack(side='left'); ttk.Entry(row,textvariable=self.timeout,width=5).pack(side='left',padx=8); ttk.Label(row,text='분').pack(side='left')
-        row = ttk.Frame(settings); row.pack(fill='x',pady=8)
+        top = tk.Frame(self.body,bg=BG);top.pack(fill='x',padx=22,pady=(0,12))
+        top.columnconfigure(0,weight=1,uniform='top');top.columnconfigure(1,weight=2,uniform='top')
+        modes = self.card('실행 모드',top,0,0)
+        for label, value in [('인식만 확인', 'observe'), ('실제 실행', 'click')]:
+            ttk.Radiobutton(modes,text=label,variable=self.mode,value=value,command=self.changed).pack(anchor='w',pady=5)
+        tk.Label(modes,text='인식만 확인에서는\n키 입력을 보내지 않습니다.',bg='white',fg='#64748b',justify='left',font=('맑은 고딕',10)).pack(anchor='w',pady=(12,0))
+        tk.Label(modes,textvariable=self.counter,bg='#eaf1ff',fg='#245cc0',font=('맑은 고딕',11,'bold'),wraplength=240,padx=10,pady=10).pack(fill='x',pady=(24,0))
+        screen = self.card('화면 인식',top,0,1)
+        self.preview = tk.Label(screen,text='게임 화면 미리보기\n\n시작하면 인식 영역이 표시됩니다.',bg='#eaf0f8',fg='#64748b',height=9,width=1)
+        self.preview.pack(fill='x',pady=(0,8))
+        tk.Label(screen,textvariable=self.message,bg='#e9f7ef',fg='#23724b',anchor='w',padx=10,pady=8,wraplength=520).pack(fill='x')
+        tk.Label(screen,textvariable=self.state,bg='#eaf1ff',fg='#245cc0',anchor='w',padx=10,pady=8,wraplength=520).pack(fill='x',pady=(5,0))
+        bottom=tk.Frame(self.body,bg=BG);bottom.pack(fill='x',padx=22,pady=(0,12))
+        bottom.columnconfigure(0,weight=1,uniform='bottom');bottom.columnconfigure(1,weight=1,uniform='bottom')
+        rules = self.card('낚기 조건',bottom,0,0)
+        grid = ttk.Frame(rules);grid.pack(fill='x')
+        for i,key in enumerate(('heavy','lucky','float','bite')):
+            ttk.Checkbutton(grid,text=PHRASES[key],variable=self.keep[key],command=self.changed).grid(row=i//2,column=i%2,sticky='w',padx=(0,8),pady=3)
+        ttk.Label(rules,text='반응이 왔다    →    취소',foreground='#64748b').pack(anchor='w',pady=(10,3))
+        ttk.Label(rules,text='뭔가 걸렸다    →    취소',foreground='#64748b').pack(anchor='w')
+        tk.Label(rules,text='중급 이상 낚기 · 하급은 다시 시작',bg='white',fg='#64748b',font=('맑은 고딕',10)).pack(anchor='w',pady=(14,0))
+        settings = self.card('반복 설정',bottom,0,1)
+        for label,var,unit in [('성공 횟수',self.limit,'회 · 0 = 무제한'),('진행 없으면 정지',self.timeout,'분')]:
+            row=ttk.Frame(settings);row.pack(fill='x',pady=8)
+            ttk.Label(row,text=label,width=16).pack(side='left')
+            ttk.Entry(row,textvariable=var,width=5).pack(side='left',padx=(0,8))
+            ttk.Label(row,text=unit,foreground='#64748b',font=('맑은 고딕',10)).pack(side='left')
+        setup = self.card('화면 설정')
+        ttk.Label(setup,textvariable=self.calibration,foreground='#64748b',wraplength=850).pack(anchor='w')
+        row=ttk.Frame(setup);row.pack(fill='x',pady=(8,0))
+        for key,title in [('message','문구 영역'),('gauge','게이지 영역'),('button','시작 버튼')]:
+            ttk.Button(row,text=title+' 지정',command=lambda k=key:self.calibrate(k)).pack(side='left',padx=(0,8))
+        advanced=ttk.Frame(setup)
+        self.advanced_open=False
+        def toggle_advanced():
+            self.advanced_open=not self.advanced_open
+            if self.advanced_open:advanced.pack(fill='x',pady=(12,0))
+            else:advanced.pack_forget()
+        ttk.Button(row,text='고급 설정',command=toggle_advanced).pack(side='right')
+        row=ttk.Frame(advanced);row.pack(fill='x',pady=(0,8))
         ttk.Label(row,text='하급 취소 키').pack(side='left',padx=(0,8))
         ttk.Combobox(row,textvariable=self.cancel_key,values=('Esc','Space'),state='readonly',width=8).pack(side='left')
-        ttk.Label(settings,text='취소 키는 PC 게임에서 확인 후 선택하세요. 낚기는 Space를 사용합니다.',foreground='#64748b',wraplength=730).pack(anchor='w')
-        row = ttk.Frame(settings); row.pack(fill='x',pady=(10,0))
-        ttk.Label(row,text='Tesseract 경로').pack(side='left',padx=(0,8))
+        ttk.Label(row,text='PC 게임에서 취소 동작을 확인하세요.',foreground='#64748b',font=('맑은 고딕',10)).pack(side='left',padx=10)
+        row=ttk.Frame(advanced);row.pack(fill='x')
+        ttk.Label(row,text='OCR 경로 (선택)').pack(side='left',padx=(0,8))
         ttk.Entry(row,textvariable=self.tesseract).pack(side='left',fill='x',expand=True)
         ttk.Button(row,text='찾기',command=self.browse_ocr).pack(side='left',padx=(6,0))
-        ttk.Label(settings,text='배포본은 OCR 포함 · 기본 경로 자동 검색 · 직접 지정은 선택 사항',foreground='#64748b').pack(anchor='w',pady=4)
-        ttk.Label(self.body,textvariable=self.counter,background=BG,font=('맑은 고딕',13,'bold')).pack(anchor='w',padx=24,pady=(0,12))
         self.load()
 
-    def card(self, title):
-        frame = tk.Frame(self.body,bg='white',highlightbackground='#dce3ee',highlightthickness=1,padx=16,pady=12)
-        frame.pack(fill='x',padx=22,pady=(0,12))
+    def card(self,title,parent=None,row=0,column=0):
+        frame=tk.Frame(parent if parent is not None else self.body,bg='white',highlightbackground='#dce3ee',highlightthickness=1,padx=16,pady=14)
+        if parent is None:frame.pack(fill='x',padx=22,pady=(0,12))
+        else:frame.grid(row=row,column=column,sticky='nsew',padx=(0,8) if column==0 else (8,0))
         tk.Label(frame,text=title,bg='white',fg='#24334a',font=('맑은 고딕',15,'bold')).pack(anchor='w',pady=(0,8))
         return frame
 
@@ -280,7 +296,7 @@ class FishingPanel:
         for key,roi in self.rois.items():
             x,y,w,h=roi; hh,ww=frame.shape[:2]
             cv2.rectangle(frame,(int(x*ww),int(y*hh)),(int((x+w)*ww),int((y+h)*hh)),(40,200,100) if key=='gauge' else (40,120,255),2)
-        width=680; height=int(frame.shape[0]*width/frame.shape[1])
+        width=max(240,min(640,self.preview.winfo_width())); height=int(frame.shape[0]*width/frame.shape[1])
         self.photo=ImageTk.PhotoImage(Image.fromarray(frame).resize((width,height)))
         self.preview.configure(image=self.photo,text='',height=0)
 
