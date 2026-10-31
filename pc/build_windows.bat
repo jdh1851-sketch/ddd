@@ -1,8 +1,10 @@
 @echo off
 cd /d "%~dp0"
-py -m pip install -r requirements.txt pyinstaller
+py -m pip install -r requirements.txt pyinstaller==6.16.0 pytest
 if errorlevel 1 exit /b 1
-py -m PyInstaller --noconfirm --clean --onefile --windowed --name Kkullim --icon app_icon.ico --add-data "app_icon.ico;." --add-data "tessdata;tessdata" --add-data "..\assets\templates;templates" kkullim_pc.py
+py -m pytest tests -q
 if errorlevel 1 exit /b 1
-echo Build complete: dist\Kkullim.exe
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_release.ps1
+if errorlevel 1 exit /b 1
+echo Portable ZIP and Setup EXE are in the release folder.
 pause
