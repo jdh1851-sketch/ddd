@@ -1,0 +1,10 @@
+Kkullim PC v0.10.0 / Windows x64
+
+1. Extract the entire ZIP. Keep the _internal folder beside Kkullim.exe.
+2. Double-click Kkullim.exe. Python and Tesseract installation are not required.
+3. Choose the fishing tab and calibrate the message, gauge and idle button regions.
+4. Check recognition-only mode before real execution. F8 start/pause; F9 stop.
+
+The low-quality cancel key defaults to Esc and must be checked in the game.
+For details, see the included Korean fishing manual.
+This build is unsigned. Actual game input still needs Windows/game validation.
