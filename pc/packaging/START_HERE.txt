@@ -1,0 +1,9 @@
+Kkullim PC v0.10.0 / Windows x64
+
+Download Kkullim-PC-0.10.0.exe and double-click it.
+This is the application itself, not an installer.
+No _internal folder, Python installation or Tesseract installation is required.
+Settings and logs are saved beside the executable.
+
+F8: start/pause. F9: stop.
+Choose the fishing tab and check recognition-only mode before game input.

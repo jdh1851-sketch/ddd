@@ -1,0 +1,53 @@
+name: Windows executable release
+on:
+  push:
+    branches: [codex/fishing-windows-release, main]
+    paths: ['pc/**', 'assets/**', '.github/workflows/windows-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install -r pc/requirements.txt pyinstaller==6.16.0 pytest
+          if ($LASTEXITCODE) { throw 'Python dependencies failed' }
+          choco install tesseract --yes --no-progress
+          if ($LASTEXITCODE -notin 0, 3010) { throw 'Tesseract install failed' }
+      - name: Tests
+        run: python -m pytest pc/tests -q
+      - name: Build single EXE; verify isolated UI and bundled OCR
+        shell: pwsh
+        run: pc/packaging/build_release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kkullim-PC-Windows-x64
+          path: pc/release/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-UI-check
+          path: pc/ui-check/*
+          if-no-files-found: error
+      - name: Publish downloadable release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "pc-v0.10.0-build.${{ github.run_number }}"
+          @'
+          Windows x64 single-file application. Download Kkullim-PC-0.10.0.exe and double-click it. No installer, adjacent _internal folder, Python installation or OCR installation is required. Both UI tabs and the embedded OCR runtime passed a smoke test with only this EXE copied into an empty folder. Actual game input and the low-quality cancel key still need in-game validation.
+          '@ | Set-Content release-notes.txt -Encoding utf8
+          gh release create $tag pc/release/* --target '${{ github.sha }}' --title "Kkullim PC 0.10.0 (build ${{ github.run_number }})" --notes-file release-notes.txt
+          if ($LASTEXITCODE) { throw 'Release publication failed' }
