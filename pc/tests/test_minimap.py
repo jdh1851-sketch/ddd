@@ -104,10 +104,10 @@ def test_stability_resets_when_target_changes_or_disappears():
 def test_observation_code_has_no_game_input_and_dispatch_returns_first():
     root=Path(__file__).resolve().parents[1]
     for name in ('minimap_ui.py','minimap_vision.py'):
-        tree=ast.parse((root/name).read_text())
+        tree=ast.parse((root/name).read_text(encoding='utf-8'))
         forbidden={'keybd_event','mouse_event','SendInput','SetCursorPos','fishing_key'}
         assert not any(isinstance(n,ast.Attribute) and n.attr in forbidden for n in ast.walk(tree))
-    tree=ast.parse((root/'kkullim_pc.py').read_text())
+    tree=ast.parse((root/'kkullim_pc.py').read_text(encoding='utf-8'))
     app=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='App')
     step=next(n for n in app.body if isinstance(n,ast.FunctionDef) and n.name=='step')
     assert isinstance(step.body[1],ast.If)
