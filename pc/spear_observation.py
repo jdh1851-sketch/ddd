@@ -82,12 +82,21 @@ class TesseractTextReader:
   value=255 if patch.ndim==2 else (255,255,255)
   patch=cv2.copyMakeBorder(patch,5,5,5,5,cv2.BORDER_CONSTANT,value=value)
   patch=cv2.resize(patch,None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC)
-  config=f'--tessdata-dir "{self.data_dir}" --psm {psm}'
-  if lang=='eng':config+=' -c tessedit_char_whitelist=XYxy0123456789.,:-+'
-  try:return self.ocr.api.image_to_string(patch,lang=lang,config=config,timeout=1.2).strip()
-  except RuntimeError as exc:
-   if 'timeout' in str(exc).lower():return ''
-   raise
+  # Explicit argument list preserves Windows paths with spaces without passing
+  # literal quote characters through pytesseract's config parser.
+  import io,subprocess
+  from PIL import Image
+  stream=io.BytesIO();Image.fromarray(patch).save(stream,format='PNG')
+  command=[self.ocr.api.pytesseract.tesseract_cmd,'stdin','stdout',
+           '--tessdata-dir',str(self.data_dir),'-l',lang,'--psm',str(psm)]
+  if lang=='eng':command+=['-c','tessedit_char_whitelist=XYxy0123456789.,:-+']
+  try:
+   proc=subprocess.run(command,input=stream.getvalue(),capture_output=True,
+                       timeout=1.2,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+  except subprocess.TimeoutExpired:return ''
+  if proc.returncode:raise ValueError('OCR 실행 실패: '+proc.stderr.decode('utf-8',errors='replace')[:300])
+  return proc.stdout.decode('utf-8',errors='replace').strip()
+
 
 
 def canonical_label(records,prefix):

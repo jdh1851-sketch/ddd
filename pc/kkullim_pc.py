@@ -363,7 +363,7 @@ if __name__=='__main__':
             packaged_ocr=KoreanOCR()
             assert packaged_ocr.api.get_tesseract_version()
             from spear_observation import NativeMapReader
-            fixture=np.array(__import__('PIL.Image',fromlist=['open']).open(BASE/'fixtures'/'native_fire.png').convert('RGB'))
+            fixture=np.array(Image.open(BASE/'fixtures'/'native_fire.png').convert('RGB'))
             observed=NativeMapReader().read(fixture,budget_seconds=30)
             assert observed['coordinates']==(-1.88,162.35) and observed['element']=='불' and observed['star']
             assert not observed['movement_allowed']
