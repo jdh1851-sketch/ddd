@@ -73,7 +73,7 @@ class Detector:
 
 class App:
     def __init__(self):
-        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10 · 미니맵 관찰 개발판');self.root.iconbitmap(str(BASE/'app_icon.ico'))
+        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10 · 투창 관찰 시험판');self.root.iconbitmap(str(BASE/'app_icon.ico'))
         self.user32=u;self.find_game=game_window;self.window_rect=rect
         self.root.geometry(f'1000x{min(1100,self.root.winfo_screenheight()-100)}');self.root.minsize(820,650)
         self.root.configure(bg='#f2f5fa');self.root.option_add('*Font',('맑은 고딕',12))
@@ -107,8 +107,11 @@ class App:
         self.tabs.add(abyss_page,text='  어비스  ');self.tabs.add(fishing_page,text='  낚시  ')
         self.fishing=FishingPanel(fishing_page,self,HOME)
         minimap_page=ttk.Frame(self.tabs)
-        self.tabs.add(minimap_page,text='  미니맵 관찰  ')
+        self.tabs.add(minimap_page,text='  투창 관찰  ')
         self.minimap=MinimapPanel(minimap_page,self)
+        self.tabs.select(2)
+        if '--selftest' not in sys.argv:
+            self.tabs.tab(0,state='disabled');self.tabs.tab(1,state='disabled')
         self.tabs.bind('<<NotebookTabChanged>>',self.tab_changed)
         self.root.protocol('WM_DELETE_WINDOW',self.close)
         canvas=tk.Canvas(abyss_page,bg='#f2f5fa',highlightthickness=0)
@@ -204,6 +207,7 @@ class App:
                 messagebox.showerror('미니맵 관찰',str(exc));return
             self.running=True;self.delay=0
             self.status.set('미니맵 관찰 중 · F8 일시정지 / F9 즉시정지 · 게임 입력 없음');return
+        self.status.set('관찰 시험판에서는 게임 입력이 차단됩니다.');return
         if self.is_fishing():
             self.hwnd=game_window()
             if not self.hwnd:messagebox.showerror('게임 창','마비노기 모바일 창을 찾지 못했습니다.');return
@@ -231,12 +235,13 @@ class App:
             self.keys[vk]=down
     def tick(self):
         try:
-            self.hotkeys()
+            if '--selftest' not in sys.argv:self.hotkeys()
             if self.running:self.step()
         except Exception as e:
             logging.exception('실행 오류');self.stop('오류로 정지: '+str(e))
         self.root.after(50,self.tick)
     def fishing_key(self,vk):
+        return False  # Observation preview: all game input disabled.
         if not self.running or not self.is_fishing() or u.GetForegroundWindow()!=self.hwnd or u.IsIconic(self.hwnd):return False
         scan=0x01 if vk==0x1B else 0x39
         u.keybd_event(vk,scan,0,0)
@@ -247,6 +252,7 @@ class App:
         now=time.monotonic()
         if self.is_minimap():
             self.minimap.step(now);return
+        self.stop('관찰 시험판: 게임 입력 차단');return
         if now<self.delay:return
         if not u.IsWindow(self.hwnd):self.stop('게임 창이 닫혀 정지했습니다.');return
         if now-self.last_progress>self.wait:self.stop('진행 제한 시간을 초과해 정지했습니다. 화면을 확인하세요.');return
@@ -356,6 +362,11 @@ if __name__=='__main__':
             from fishing import KoreanOCR
             packaged_ocr=KoreanOCR()
             assert packaged_ocr.api.get_tesseract_version()
+            from spear_observation import NativeMapReader
+            fixture=np.array(__import__('PIL.Image',fromlist=['open']).open(BASE/'fixtures'/'native_fire.png').convert('RGB'))
+            observed=NativeMapReader().read(fixture,budget_seconds=30)
+            assert observed['coordinates']==(-1.88,162.35) and observed['element']=='불' and observed['star']
+            assert not observed['movement_allowed']
             assert len(app.tabs.tabs())==3
             from threading import Event
             busy=Event();app.vision.submit(lambda:busy.wait(5))

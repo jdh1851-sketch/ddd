@@ -25,6 +25,8 @@ jobs:
           if ($LASTEXITCODE) { throw 'Python dependencies failed' }
           choco install tesseract --yes --no-progress
           if ($LASTEXITCODE -notin 0, 3010) { throw 'Tesseract install failed' }
+      - name: Prepare verified OCR models
+        run: python pc/packaging/prepare_assets.py
       - name: Tests
         run: python -m pytest pc/tests -q
       - name: Build single EXE; verify isolated UI and bundled OCR
@@ -45,9 +47,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "pc-minimap-observe-build.${{ github.run_number }}"
+          $tag = "pc-spear-observe-build.${{ github.run_number }}"
           @'
-          Observation preview based on PC v0.10, not the local v0.14.4/v0.14.5 sources. Download Kkullim-PC-0.10.1-minimap-observe.exe. The third tab observes the EntityMap window or a screenshot without game input. Spear answer labels, bingo grids and star/X candidates are experimental. Real screenshots and live game accuracy remain unvalidated; O detection, movement and mechanic completion are not implemented. The existing abyss/fishing tabs can send game input when explicitly started. All three UI tabs and bundled Korean OCR are smoke-tested in isolation. No separate Python or OCR installation is required.
+          Read-only spear observation preview based on PC v0.10, not local v0.14.4/v0.14.5. Download Kkullim-PC-0.10.2-spear-observe.exe. Reads the existing Mobilay coordinate window or original screenshots; no new minimap and no Mobilay settings changes. All game input is disabled in this preview. Native fire-label and signed-coordinate OCR is tested on anonymized source crops, including in the isolated single EXE. Live game accuracy, other elements, target ownership, world target coordinates, movement and mechanic success remain unverified. Korean and numeric OCR runtimes are bundled. F8 starts/pauses observation; F9 stops it.
           '@ | Set-Content release-notes.txt -Encoding utf8
-          gh release create $tag pc/release/* --prerelease --latest=false --target '${{ github.sha }}' --title "Kkullim PC minimap observation preview (build ${{ github.run_number }})" --notes-file release-notes.txt
+          gh release create $tag pc/release/* --prerelease --latest=false --target '${{ github.sha }}' --title "Kkullim PC spear observation preview (build ${{ github.run_number }})" --notes-file release-notes.txt
           if ($LASTEXITCODE) { throw 'Release publication failed' }

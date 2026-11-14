@@ -1,12 +1,12 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
-$version = '0.10.1-minimap-observe'
+$version = '0.10.2-spear-observe'
 python packaging/prepare_assets.py
 if ($LASTEXITCODE) { throw 'Asset preparation failed' }
 $ocr = Join-Path $env:ProgramFiles 'Tesseract-OCR'
 if (!(Test-Path "$ocr\tesseract.exe")) { throw 'Build machine needs Tesseract-OCR. Run choco install tesseract -y.' }
 # One-file distribution: Python, templates and OCR are extracted privately at runtime.
-python -m PyInstaller --noconfirm --clean --onefile --windowed --name Kkullim --icon app_icon.ico --add-data 'app_icon.ico;.' --add-data '..\assets\templates;templates' --add-data 'tessdata;tessdata' --add-data "$ocr;ocr" kkullim_pc.py
+python -m PyInstaller --noconfirm --clean --onefile --windowed --name Kkullim --icon app_icon.ico --add-data 'app_icon.ico;.' --add-data '..\assets\templates;templates' --add-data 'tessdata;tessdata' --add-data 'tests/fixtures;fixtures' --add-data "$ocr;ocr" kkullim_pc.py
 if ($LASTEXITCODE) { throw 'PyInstaller failed' }
 # Test a copy in an otherwise empty folder. No _internal or installed OCR may be required.
 $tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
