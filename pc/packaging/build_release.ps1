@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
-$version = '0.10.0'
+$version = '0.10.1-minimap-observe'
 python packaging/prepare_assets.py
 if ($LASTEXITCODE) { throw 'Asset preparation failed' }
 $ocr = Join-Path $env:ProgramFiles 'Tesseract-OCR'
