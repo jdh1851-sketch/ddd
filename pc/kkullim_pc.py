@@ -73,8 +73,8 @@ class Detector:
 
 class App:
     def __init__(self):
-        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10 · 투창 관찰 시험판');self.root.iconbitmap(str(BASE/'app_icon.ico'))
-        self.user32=u;self.find_game=game_window;self.window_rect=rect
+        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10.3 · 투창 관찰·분석 로그');self.root.iconbitmap(str(BASE/'app_icon.ico'))
+        self.user32=u;self.find_game=game_window;self.window_rect=rect;self.home_dir=HOME
         self.root.geometry(f'1000x{min(1100,self.root.winfo_screenheight()-100)}');self.root.minsize(820,650)
         self.root.configure(bg='#f2f5fa');self.root.option_add('*Font',('맑은 고딕',12))
         style=ttk.Style();style.theme_use('clam')
@@ -198,7 +198,7 @@ class App:
         self.state='ready';self.count=0;self.pending=None;self.candidate=None;self.stable=0;self.food_used=False
         self.status.set('회차 초기화 완료. 입장 화면 또는 던전 시작 화면에서 시작하세요.')
     def stop(self,msg):
-        self.running=False;self.vision.reset();self.fishing.stopped();self.minimap.stopped();self.status.set(msg);logging.info(msg)
+        self.running=False;self.vision.reset();self.fishing.stopped();self.minimap.stopped(msg);self.status.set(msg);logging.info(msg)
     def toggle(self):
         if self.running:self.stop('일시정지');return
         if self.is_minimap():
@@ -364,9 +364,22 @@ if __name__=='__main__':
             assert packaged_ocr.api.get_tesseract_version()
             from spear_observation import NativeMapReader
             fixture=np.array(Image.open(BASE/'fixtures'/'native_fire.png').convert('RGB'))
-            observed=NativeMapReader().read(fixture,budget_seconds=30)
+            token=dict(scan_id=1,generation=app.minimap.image_generation,source='selftest')
+            _,observed,_,_=app.minimap.analyze(fixture,time.monotonic(),True,token,True)
             assert observed['coordinates']==(-1.88,162.35) and observed['element']=='불' and observed['star']
             assert not observed['movement_allowed']
+            app.minimap.log.event('stale',**token,stage='selftest')
+            diagnostic_zip=HOME/'selftest-diagnostics.zip'
+            app.minimap.log.export(diagnostic_zip)
+            import zipfile
+            with zipfile.ZipFile(diagnostic_zip) as diagnostic:
+                saved=json.loads(diagnostic.read('summary.json'))
+                assert saved['event_counts']['completed']==1 and saved['event_counts']['stale']==1
+                rows=[json.loads(line) for line in diagnostic.read('events.jsonl').decode('utf-8').splitlines()]
+                completion=next(row for row in rows if row['event']=='completed')
+                assert completion['result']['coordinates']==[-1.88,162.35]
+                assert completion['result']['ocr_attempts']
+                assert Image.open(diagnostic.open(completion['image'])).size==(fixture.shape[1],fixture.shape[0])
             assert len(app.tabs.tabs())==3
             from threading import Event
             busy=Event();app.vision.submit(lambda:busy.wait(5))
@@ -388,7 +401,7 @@ if __name__=='__main__':
                 assert not var.get() and label.cget('text')=='사용 안 함'
                 var.set(True);assert label.cget('text')=='사용 중'
                 var.set(False);assert label.cget('text')=='사용 안 함'
-            (HOME/'selftest.txt').write_text('OK: GUI tabs, bundled OCR runtime, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
+            (HOME/'selftest.txt').write_text('OK: GUI tabs, bundled OCR runtime, native OCR diagnostic ZIP, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
             app.vision.close();app.fishing.close();app.minimap.close();app.root.destroy()
         else:app.root.mainloop()
     except Exception:

@@ -137,11 +137,12 @@ class NativeMapReader:
    raise ValueError('원본 RGB 좌표 창 이미지를 확인하세요.')
   started=time.monotonic();deadline=started+budget_seconds
   if self.text_reader is None:self.text_reader=TesseractTextReader()
-  coords=[];labels=[];examined=0;partial=False
+  coords=[];labels=[];examined=0;partial=False;attempts=[]
   for box in coordinate_regions(rgb):
    if time.monotonic()>=deadline:partial=True;break
    x,y,x2,y2=box;patch=rgb[y:y2,x:x2]
    texts=[self.text_reader(patch,'eng',7,v) for v in ('rgb','gray')]
+   attempts.append({'kind':'coordinates','box':box,'texts':[s[:100] for s in texts]})
    value=coordinate_consensus(texts)
    if value is not None:coords.append({'box':box,'value':value})
   regions=self.cached_regions(rgb)+label_regions(rgb)
@@ -151,10 +152,12 @@ class NativeMapReader:
    if box in seen:continue
    seen.add(box);examined+=1;x,y,x2,y2=box;patch=rgb[y:y2,x:x2]
    raw=self.text_reader(patch,'kor',7,'inverted')
+   attempt={'kind':'label','box':box,'psm7':raw[:100]};attempts.append(attempt)
    for prefix in ('정답','투창병'):
     element=parse_element(raw,prefix)
     if element is None:continue
     check=self.text_reader(patch,'kor',6,'inverted')
+    attempt['psm6']=check[:100]
     if parse_element(check,prefix)!=element:continue
     labels.append({'box':box,'prefix':prefix,'element':element})
    boss=canonical_label(labels,'투창병');answer=canonical_label(labels,'정답')
@@ -173,6 +176,7 @@ class NativeMapReader:
   return {'coordinates':next(iter(values)) if len(values)==1 else None,
           'coordinate_regions':coords,'boss':boss,'answer':answer,'element':element,
           'star':star,'partial':partial,'regions_examined':examined,
+          'ocr_attempts':attempts,
           'processing_seconds':time.monotonic()-started,
           'movement_allowed':False,'success_confirmed':False,
           'self_target_confirmed':False,'target_world_coordinates':None}

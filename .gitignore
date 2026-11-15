@@ -11,3 +11,5 @@ pc/selftest.txt
 pc/release/
 pc/ui-check/
 pc/tessdata/
+pc/observation_logs/
+pc/selftest-diagnostics.zip
