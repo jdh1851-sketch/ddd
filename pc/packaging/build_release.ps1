@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
-$version = '0.10.3-spear-observe'
+$version = '0.10.4-packet-observe'
 python packaging/prepare_assets.py
 if ($LASTEXITCODE) { throw 'Asset preparation failed' }
 $ocr = Join-Path $env:ProgramFiles 'Tesseract-OCR'
@@ -24,6 +24,7 @@ Get-Content "$smoke\selftest.txt"
 New-Item -ItemType Directory -Force ui-check | Out-Null
 Copy-Item "$smoke\selftest-ui.json" ui-check
 Copy-Item "$smoke\selftest-diagnostics.zip" ui-check
+Copy-Item "$smoke\selftest-packets.zip" ui-check
 Copy-Item "$smoke\preview-*.png" ui-check
 Get-Content "$smoke\selftest-ui.json"
 Remove-Item -Recurse -Force $smoke

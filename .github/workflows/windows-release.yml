@@ -47,9 +47,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "pc-spear-observe-build.${{ github.run_number }}"
+          $tag = "pc-packet-observe-build.${{ github.run_number }}"
           @'
-          Read-only spear observation preview based on PC v0.10, not local v0.14.4/v0.14.5. Download Kkullim-PC-0.10.3-spear-observe.exe. Reads the existing Mobilay coordinate window or original screenshots; no new minimap and no Mobilay settings changes. All game input is disabled in this preview. Native fire-label and signed-coordinate OCR is tested on anonymized source crops, including in the isolated single EXE. Live game accuracy, other elements, target ownership, world target coordinates, movement and mechanic success remain unverified. Korean and numeric OCR runtimes are bundled. F8 starts/pauses observation; F9 stops it. This update adds bounded per-frame OCR diagnostics and a manual ZIP export button. Recent coordinate-window images (may include player names) are optional; no automatic upload. The isolated EXE selftest also validates actual OCR diagnostics and ZIP contents.
+          Read-only packet diagnostics preview based on PC v0.10, not local v0.14.4/v0.14.5. Download Kkullim-PC-0.10.4-packet-observe.exe. The fourth tab records only actual game-PID TCP connections involving port16000 via existing Npcap, nonpromiscuously. It stops after60seconds/12MiB, on user stop or connection change. Manually export PCAP+metadata ZIP for analysis; no automatic upload, packet sending, reinjection or Mobilay settings changes. Current-game coordinates/IDs/mechanics are not decoded or verified. All game input stays disabled. The old OCR tab remains experimental (fire fixture only; lightning unsupported). Windows unit tests and isolated single-EXE checks cover four UI tabs, bundled OCR and simulated passive packet recording/PCAP export; actual user-PC Npcap reception remains unverified. F8 starts/stops the selected mode; F9 stops it.
           '@ | Set-Content release-notes.txt -Encoding utf8
-          gh release create $tag pc/release/* --prerelease --latest=false --target '${{ github.sha }}' --title "Kkullim PC spear observation preview (build ${{ github.run_number }})" --notes-file release-notes.txt
+          gh release create $tag pc/release/* --prerelease --latest=false --target '${{ github.sha }}' --title "Kkullim PC passive packet preview (build ${{ github.run_number }})" --notes-file release-notes.txt
           if ($LASTEXITCODE) { throw 'Release publication failed' }

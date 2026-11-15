@@ -9,6 +9,7 @@ from PIL import ImageGrab, Image, ImageTk
 from fishing_ui import FishingPanel
 from scan_async import LatestScan
 from minimap_ui import MinimapPanel
+from packet_ui import PacketPanel
 
 BASE = pathlib.Path(getattr(sys, '_MEIPASS', pathlib.Path(__file__).parent))
 HOME = pathlib.Path(sys.executable).parent if getattr(sys, 'frozen', False) else pathlib.Path(__file__).parent
@@ -21,6 +22,8 @@ u.GetAncestor.argtypes = [W.HWND, W.UINT]
 u.GetAncestor.restype = W.HWND
 u.WindowFromPoint.argtypes = [W.POINT]
 u.WindowFromPoint.restype = W.HWND
+u.GetWindowThreadProcessId.argtypes = [W.HWND,C.POINTER(W.DWORD)]
+u.GetWindowThreadProcessId.restype = W.DWORD
 logging.basicConfig(filename=str(HOME / 'abyss.log'), level=logging.INFO, encoding='utf-8', format='%(asctime)s %(message)s')
 
 NAMES = {'enter':'입장하기', 'compass':'나침반', 'skip':'장면 넘기기', 'touch':'화면 터치', 'retry':'다시 하기', 'food':'음식 B', 'break':'브레이크', 'partyready':'준비 완료', 'partycancel':'준비 취소'}
@@ -73,7 +76,7 @@ class Detector:
 
 class App:
     def __init__(self):
-        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10.3 · 투창 관찰·분석 로그');self.root.iconbitmap(str(BASE/'app_icon.ico'))
+        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10.4 · 투창 패킷 관찰');self.root.iconbitmap(str(BASE/'app_icon.ico'))
         self.user32=u;self.find_game=game_window;self.window_rect=rect;self.home_dir=HOME
         self.root.geometry(f'1000x{min(1100,self.root.winfo_screenheight()-100)}');self.root.minsize(820,650)
         self.root.configure(bg='#f2f5fa');self.root.option_add('*Font',('맑은 고딕',12))
@@ -109,7 +112,10 @@ class App:
         minimap_page=ttk.Frame(self.tabs)
         self.tabs.add(minimap_page,text='  투창 관찰  ')
         self.minimap=MinimapPanel(minimap_page,self)
-        self.tabs.select(2)
+        packet_page=ttk.Frame(self.tabs)
+        self.tabs.add(packet_page,text='  패킷 기록  ')
+        self.packet=PacketPanel(packet_page,self)
+        self.tabs.select(3)
         if '--selftest' not in sys.argv:
             self.tabs.tab(0,state='disabled');self.tabs.tab(1,state='disabled')
         self.tabs.bind('<<NotebookTabChanged>>',self.tab_changed)
@@ -177,20 +183,24 @@ class App:
         self.keys={};self.candidate=None;self.stable=0
         self.root.after(250,self.tick)
     def scroll_page(self,event):
-        if self.is_minimap():return
+        if self.is_minimap() or self.is_packet():return
         canvas=self.fishing.canvas if self.is_fishing() else self.abyss_canvas
         canvas.yview_scroll(-int(event.delta/120),'units')
     def is_fishing(self):
         return self.tabs.index(self.tabs.select())==1
     def is_minimap(self):
         return self.tabs.index(self.tabs.select())==2
+    def is_packet(self):
+        return self.tabs.index(self.tabs.select())==3
     def tab_changed(self,event=None):
         if self.running:self.stop('탭 변경 · 일시정지')
         elif hasattr(self,'minimap'):self.minimap.invalidate()
     def close(self):
-        self.stop('종료');self.vision.close();self.fishing.close();self.minimap.close();self.root.destroy()
+        self.stop('종료');self.vision.close();self.fishing.close();self.minimap.close();self.packet.close();self.root.destroy()
     def reset(self):
         if self.running:return
+        if self.is_packet():
+            self.packet.refresh();return
         if self.is_minimap():
             self.minimap.invalidate();return
         if self.is_fishing():
@@ -198,7 +208,7 @@ class App:
         self.state='ready';self.count=0;self.pending=None;self.candidate=None;self.stable=0;self.food_used=False
         self.status.set('회차 초기화 완료. 입장 화면 또는 던전 시작 화면에서 시작하세요.')
     def stop(self,msg):
-        self.running=False;self.vision.reset();self.fishing.stopped();self.minimap.stopped(msg);self.status.set(msg);logging.info(msg)
+        self.running=False;self.vision.reset();self.fishing.stopped();self.minimap.stopped(msg);self.packet.stopped();self.status.set(msg);logging.info(msg)
     def toggle(self):
         if self.running:self.stop('일시정지');return
         if self.is_minimap():
@@ -207,6 +217,12 @@ class App:
                 messagebox.showerror('미니맵 관찰',str(exc));return
             self.running=True;self.delay=0
             self.status.set('미니맵 관찰 중 · F8 일시정지 / F9 즉시정지 · 게임 입력 없음');return
+        if self.is_packet():
+            try:self.packet.start()
+            except (ValueError,OSError,RuntimeError) as exc:
+                messagebox.showerror('패킷 기록',str(exc));return
+            self.running=True
+            self.status.set('패킷 수신 기록 중 · F8 정지 / F9 즉시정지 · 게임 입력 없음');return
         self.status.set('관찰 시험판에서는 게임 입력이 차단됩니다.');return
         if self.is_fishing():
             self.hwnd=game_window()
@@ -252,6 +268,8 @@ class App:
         now=time.monotonic()
         if self.is_minimap():
             self.minimap.step(now);return
+        if self.is_packet():
+            self.packet.step(now);return
         self.stop('관찰 시험판: 게임 입력 차단');return
         if now<self.delay:return
         if not u.IsWindow(self.hwnd):self.stop('게임 창이 닫혀 정지했습니다.');return
@@ -380,12 +398,15 @@ if __name__=='__main__':
                 assert completion['result']['coordinates']==[-1.88,162.35]
                 assert completion['result']['ocr_attempts']
                 assert Image.open(diagnostic.open(completion['image'])).size==(fixture.shape[1],fixture.shape[0])
-            assert len(app.tabs.tabs())==3
+            from packet_capture import run_selftest
+            packet_zip=run_selftest(HOME)
+            assert pathlib.Path(packet_zip).is_file()
+            assert len(app.tabs.tabs())==4
             from threading import Event
             busy=Event();app.vision.submit(lambda:busy.wait(5))
             timings=[]
             try:
-                for index in (2,1,0,2,0):
+                for index in (3,2,1,0,3,0):
                     started=time.perf_counter();app.tabs.select(index);app.root.update()
                     timings.append((time.perf_counter()-started)*1000)
                 assert max(timings)<750, f'Tab switching blocked: {timings}'
@@ -393,7 +414,7 @@ if __name__=='__main__':
             finally:busy.set()
             assert all(v.get() for v in app.fishing.keep.values())
             (HOME/'selftest-ui.json').write_text(json.dumps({'tab_switch_ms':timings,'vision_busy_during_switch':True}),encoding='utf-8')
-            for index,name in ((2,'minimap'),(1,'fishing'),(0,'abyss')):
+            for index,name in ((3,'packets'),(2,'minimap'),(1,'fishing'),(0,'abyss')):
                 app.tabs.select(index);app.root.update();time.sleep(.15);app.root.update()
                 x,y=app.root.winfo_rootx(),app.root.winfo_rooty()
                 ImageGrab.grab(bbox=(x,y,x+app.root.winfo_width(),y+app.root.winfo_height())).save(HOME/f'preview-{name}.png')
@@ -401,8 +422,8 @@ if __name__=='__main__':
                 assert not var.get() and label.cget('text')=='사용 안 함'
                 var.set(True);assert label.cget('text')=='사용 중'
                 var.set(False);assert label.cget('text')=='사용 안 함'
-            (HOME/'selftest.txt').write_text('OK: GUI tabs, bundled OCR runtime, native OCR diagnostic ZIP, OpenCV, templates, Windows API initialized. No game input sent.',encoding='utf-8')
-            app.vision.close();app.fishing.close();app.minimap.close();app.root.destroy()
+            (HOME/'selftest.txt').write_text('OK: four GUI tabs, bundled OCR, OCR diagnostic ZIP, simulated passive packet capture and PCAP ZIP, Windows API initialized. Live game/Npcap capture unverified. No game input sent.',encoding='utf-8')
+            app.vision.close();app.fishing.close();app.minimap.close();app.packet.close();app.root.destroy()
         else:app.root.mainloop()
     except Exception:
         logging.exception('프로그램 초기화 오류')

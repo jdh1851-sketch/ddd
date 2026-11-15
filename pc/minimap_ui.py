@@ -24,7 +24,7 @@ class MinimapPanel:
         self.report=tk.StringVar(value='관찰 전용 · 게임 입력 차단')
         self.detail=tk.StringVar(value='기존 모비레이 좌표 창을 읽습니다. 원본 창과 캡처 이미지를 사용할 수 있습니다.')
         ttk.Label(parent,text='1번 방 투창 · 원본 창 관찰',font=('맑은 고딕',18,'bold')).pack(pady=12)
-        ttk.Label(parent,text='정답 읽기 시험 · 이동/공격/성공 판정 미연결').pack()
+        ttk.Label(parent,text='불 속성 원본 시험 · 번개 등 다른 속성 미지원 · 이동/공격 미연결').pack()
         buttons=ttk.Frame(parent);buttons.pack(pady=8)
         ttk.Button(buttons,text='원본 PNG 열기',command=self.load).pack(side='left',padx=5)
         ttk.Button(buttons,text='기존 좌표 창 관찰 F8',command=self.host.toggle).pack(side='left',padx=5)

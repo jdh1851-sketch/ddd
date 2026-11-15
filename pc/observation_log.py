@@ -13,7 +13,7 @@ import uuid
 import zipfile
 from PIL import Image
 
-APP_VERSION = '0.10.3-spear-observe'
+APP_VERSION = '0.10.4-packet-observe'
 
 
 def utc_now():

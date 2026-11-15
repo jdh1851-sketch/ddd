@@ -34,4 +34,9 @@ def test_preview_dispatch_blocks_legacy_inputs():
     app=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='App')
     methods={n.name:n for n in app.body if isinstance(n,ast.FunctionDef)}
     assert isinstance(methods['fishing_key'].body[0],ast.Return)
-    assert isinstance(methods['step'].body[3],ast.Return)
+    # Both observation dispatches return before the unconditional input lock.
+    statements=methods['step'].body
+    assert ast.unparse(statements[2].test)=='self.is_packet()'
+    assert isinstance(statements[2].body[-1],ast.Return)
+    assert ast.unparse(statements[3]).startswith('self.stop(')
+    assert isinstance(statements[4],ast.Return)
