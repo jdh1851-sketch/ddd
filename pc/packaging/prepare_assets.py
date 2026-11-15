@@ -16,3 +16,11 @@ if not (root/'LICENSE').exists():
     data=urllib.request.urlopen('https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/LICENSE',timeout=60).read()
     (root/'LICENSE').write_bytes(data)
 print('Korean OCR data verified.')
+expected_eng='7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2'
+english=root/'eng.traineddata'
+if not english.exists() or hashlib.sha256(english.read_bytes()).hexdigest()!=expected_eng:
+    data=urllib.request.urlopen('https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata',timeout=60).read()
+    if hashlib.sha256(data).hexdigest()!=expected_eng:
+        raise RuntimeError('English model checksum changed; review before updating the expected hash.')
+    english.write_bytes(data)
+print('Coordinate OCR data verified.')

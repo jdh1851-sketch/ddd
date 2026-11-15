@@ -1,5 +1,1 @@
-# Gauge replay fixtures
-
-`fishing_gauges.npz` contains only boolean green-pixel masks from cropped gauge regions, plus original presentation timestamps, from the user-provided fishing samples ending in `205445319` and `205626241`. No full gameplay frames, chat or player names are included.
-
-The masks preserve the gauge's initial appearance, descent and rebound. Replay tests reconstruct green-on-black crops to test the same contour detector and controller. Message classification is supplied separately in these replay tests; they do not claim end-to-end OCR verification.
+Native-fire fixture contains only coordinate, boss/answer text and adjacent star crops from the user-provided original-resolution screenshot, pasted at their original positions on a blank canvas. Player names and the rest of the scene are omitted. This is a development regression sample, not independent evidence of general live-game accuracy. Tests never send game input.

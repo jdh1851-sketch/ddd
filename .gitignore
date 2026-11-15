@@ -10,3 +10,11 @@ pc/fishing_idle.png
 pc/selftest.txt
 pc/release/
 pc/ui-check/
+pc/tessdata/
+pc/observation_logs/
+pc/selftest-diagnostics.zip
+pc/packet_logs/
+pc/selftest-packets.zip
+pc/selftest-inspection.zip
+pc/selftest-spear.json
+pc/selftest-packet-decode.zip
