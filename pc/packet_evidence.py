@@ -97,9 +97,10 @@ def capture_coordinate_window():
 class EvidenceRecorder:
     def __init__(self, base_dir, source_provider=None, *, interval=1., image_slots=30,
                  max_image_bytes=2 * 1024 * 1024, max_total_image_bytes=8 * 1024 * 1024,
-                 max_events=180, max_event_bytes=65536):
+                 max_events=180, max_event_bytes=65536, on_frame=None):
         self.base_dir = Path(base_dir)
         self.source_provider = source_provider or capture_coordinate_window
+        self.on_frame=on_frame
         self.interval = max(.01, float(interval))
         self.image_slots = max(1, min(int(image_slots), 30))
         self.max_image_bytes = max(1, min(int(max_image_bytes), 2 * 1024 * 1024))
@@ -242,6 +243,12 @@ class EvidenceRecorder:
                               last_capture_epoch=evidence['captured_epoch'])
         self._event('captured', file=name, **evidence)
         self._write_manifest()
+        if self.on_frame:
+            try:
+                self.on_frame(rgb,evidence['captured_epoch'],frame_id,
+                    capture_started_epoch=started,capture_finished_epoch=finished)
+            except Exception as exc:
+                self._event('analysis_callback_error',message=str(exc)[:300])
 
     def _write_manifest(self):
         with self.lock:

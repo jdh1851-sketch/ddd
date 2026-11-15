@@ -12,6 +12,8 @@ from PIL import Image
 from packet_capture import PacketCapture
 from packet_decode import analyze_archive
 from packet_evidence import EvidenceRecorder
+from packet_identity import IdentityTracker
+from movement_evidence import MovementRecorder
 
 
 def run_inspection_selftest(base_dir, fixture):
@@ -42,24 +44,38 @@ def run_inspection_selftest(base_dir, fixture):
         def close(self,handle):pass
     capture=PacketCapture(base_dir,api_factory=FakeAPI,connection_provider=lambda pid:[connection])
     evidence=EvidenceRecorder(base_dir,source_provider=lambda:(fixture,{'source_kind':'synthetic-selftest'}))
+    controls=MovementRecorder(base_dir,state_provider=lambda:dict(foreground_pid=1,keys={'W'},buttons={},cursor=(1,2)))
+    identity=IdentityTracker()
     try:
         capture.start(1,seconds=1)
         evidence.start(Path(capture.status()['session_dir']))
-        capture.thread.join(4);evidence.close()
+        controls.start(Path(capture.status()['session_dir']),game_pid=1)
+        capture.thread.join(4);evidence.close();controls.close()
         assert not capture.status()['running'] and not capture.status()['error']
         assert evidence.status()['captured']>=1
-        path=Path(base_dir)/'selftest-inspection.zip';capture.export(path,evidence=evidence)
+        path=Path(base_dir)/'selftest-inspection.zip';capture.export(path,evidence=evidence,movement=controls)
         result=analyze_archive(path)
         assert result['server_frames']==5 and result['counters']['position_records']==1
         assert result['positions'][0]['entity_id']==777 and result['positions'][0]['x']==12.5
         assert result['boss_candidates'][0]['entity_id']==888 and result['decode_errors']==1
         assert not any(result[key] for key in ('self_identity_confirmed','departure_signal_confirmed','success_confirmed','game_input_allowed'))
         with zipfile.ZipFile(path) as archive:
+            controls_manifest=json.loads(archive.read('movement/manifest.json'))
+            assert controls_manifest['calibration_verified'] is False
             manifest=json.loads(archive.read('evidence/manifest.json'))
             for name,record in manifest['images'].items():
                 image=Image.open(io.BytesIO(archive.read('evidence/'+name)))
                 assert image.size==(fixture.shape[1],fixture.shape[0])
                 assert record['capture_started_epoch']<=record['captured_epoch']<=record['capture_finished_epoch']
+        epoch=time.time()
+        identity.add_position(dict(entity_id=777,x=-1.88,y=162.35,timestamp=epoch-.01,
+            stream_id='selftest',source_id='synthetic',generation=0))
+        identity.observe_frame(fixture,epoch,1)
+        deadline=time.monotonic()+5
+        while identity.snapshot().get('ocr_pending') and time.monotonic()<deadline:time.sleep(.01)
+        bound=identity.snapshot()
+        assert bound['observations'][0]['coordinates']==[-1.88,162.35]
+        assert not bound['confirmed'] and bound['match_count']==1
         return path,result
     finally:
-        capture.close();evidence.close()
+        capture.close();evidence.close();controls.close();identity.close()

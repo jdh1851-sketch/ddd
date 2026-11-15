@@ -14,6 +14,7 @@ import struct
 from threading import RLock
 import time
 import zipfile
+from spear_packet_state import SpearPacketState
 
 MAX_BUFFER = 2 * 1024 * 1024
 MAX_DECODED = 256 * 1024
@@ -283,10 +284,12 @@ class _Stream:
 
 
 class PacketInspector:
-    def __init__(self):
+    def __init__(self, on_position=None, on_reset=None):
         self._lock = RLock(); self._streams = {}; self._counts = Counter()
         self._positions = {}; self._bosses = {}; self._warnings = []
         self._time = None; self._fed_at = None
+        self._on_position=on_position;self._on_reset=on_reset
+        self.spear=SpearPacketState()
 
     def _warn(self, reason):
         if reason not in self._warnings:
@@ -296,6 +299,8 @@ class PacketInspector:
     def _revoke(self, name):
         self._positions = {key: value for key, value in self._positions.items() if key[0] != name}
         self._bosses = {key: value for key, value in self._bosses.items() if key[0] != name}
+        self.spear.reset(stream_id=name)
+        if self._on_reset:self._on_reset(name)
 
     def feed(self, raw, datalink, timestamp, source_id='default'):
         timestamp = float(timestamp)
@@ -334,7 +339,9 @@ class PacketInspector:
 
     def _frame(self, stream, typ, encoding, body, timestamp):
         self._counts['server_frames'] += 1
-        if typ in (20132, 20316) and not body and not encoding: return
+        if typ in (20132, 20316) and not body and not encoding:
+            self.spear.feed(typ,body,timestamp,stream_id=stream.name,generation=stream.generation)
+            return
         if encoding not in (0, 1):
             self._counts['opaque'] += 1; self._warn('unknown_encoding'); return
         remaining = MAX_TOTAL_DECODED - self._counts['decoded_bytes']
@@ -350,13 +357,18 @@ class PacketInspector:
         if len(body) > remaining:
             self._counts['opaque'] += 1; self._warn('decoded_budget_exhausted'); return
         self._counts['decoded_bytes'] += len(body)
-        if typ == 170826 and len(body) == 20:
-            entity, x, y, heading = struct.unpack('<Qfff', body)
-            if 0 < entity < 2**64 and all(math.isfinite(v) and abs(v) < 1e6 for v in (x, y, heading)):
-                self._put_candidate(self._positions, (stream.name, entity), dict(entity_id=entity, x=x, y=y, heading=heading,
+        self.spear.feed(typ,body,timestamp,stream_id=stream.name,generation=stream.generation)
+        if (typ in (170826,170830) and len(body)==20) or (typ==170815 and len(body)==16):
+            entity, x, y=struct.unpack_from('<Qff',body)
+            heading=struct.unpack_from('<f',body,16)[0] if len(body)==20 else None
+            if 0 < entity < 2**64 and all(math.isfinite(v) and abs(v) < 1e6 for v in (x,y)) and (heading is None or (math.isfinite(heading) and abs(heading)<1e6)):
+                sample=dict(entity_id=entity, x=x, y=y, heading=heading,
                     timestamp=timestamp, source_type=typ, stream_id=stream.name, source_id=stream.source_id,
-                    identity_confirmed=False, profile='observed-170826-v1', generation=stream.generation), 256)
+                    identity_confirmed=False, profile='observed-position-v2', generation=stream.generation)
+                self._put_candidate(self._positions, (stream.name, entity), sample, 256)
                 self._counts['position_records'] += 1
+                self.spear.update_position(sample)
+                if self._on_position:self._on_position(sample)
             else:
                 self._counts['decode_errors'] += 1; self._warn('invalid_position')
         elif typ == 20051 and len(body) == 1636:
@@ -393,11 +405,12 @@ class PacketInspector:
                 counters=dict(self._counts), warnings=list(self._warnings), last_capture_timestamp=self._time,
                 self_identity_confirmed=False, element=None, departure_signal_confirmed=False,
                 success_confirmed=False, game_input_allowed=False,
-                experimental_profile=True, profile='observed-20261115-170826')
+                experimental_profile=True, profile='observed-20261115-position-v2',
+                spear=self.spear.snapshot(now=now))
             return json.loads(json.dumps(result, allow_nan=False))
 
 
-def analyze_archive(path):
+def analyze_archive(path, position_observer=None, reset_observer=None):
     """Replay only allowlisted PCAP members without extracting any ZIP paths."""
     packets = []; total = 0
     deadline = time.monotonic() + 30
@@ -421,7 +434,7 @@ def analyze_archive(path):
                     if len(packets) > 200000: raise ValueError('Archive contains too many packets')
         if not any(re.fullmatch(r'adapter-\d{2}\.pcap', name) for name in names):
             raise ValueError('Archive contains no supported PCAP files')
-    inspector = PacketInspector()
+    inspector = PacketInspector(on_position=position_observer,on_reset=reset_observer)
     for timestamp, source, raw, link in sorted(packets, key=lambda row: row[0]):
         if time.monotonic() > deadline: raise ValueError('Archive replay time limit')
         inspector.feed(raw, link, timestamp, source)

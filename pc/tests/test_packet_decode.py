@@ -331,3 +331,12 @@ def test_idle_client_stream_does_not_discard_complete_frames_at_trusted_boundary
     assert result['client_frames'] == 2
     assert not result['positions']
     assert_read_only(result)
+
+
+def test_initial_tail_before_prefix_can_synchronize_once_missing_prefix_arrives():
+    reader = PacketInspector(); payload = batch(position())
+    assert not feed(reader, payload[18:], sequence=1018)['positions']
+    result = feed(reader, payload[:18], sequence=1000, timestamp=1.1)
+    assert result['server_frames'] == 3
+    assert result['positions'][0]['entity_id'] == 101
+    assert_read_only(result)

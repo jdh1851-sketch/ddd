@@ -76,7 +76,7 @@ class Detector:
 
 class App:
     def __init__(self):
-        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10.5 · 투창 패킷 해석·검증');self.root.iconbitmap(str(BASE/'app_icon.ico'))
+        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10.6 · 투창 정답·성공 관찰');self.root.iconbitmap(str(BASE/'app_icon.ico'))
         self.user32=u;self.find_game=game_window;self.window_rect=rect;self.home_dir=HOME
         self.root.geometry(f'1000x{min(1100,self.root.winfo_screenheight()-100)}');self.root.minsize(820,650)
         self.root.configure(bg='#f2f5fa');self.root.option_add('*Font',('맑은 고딕',12))
@@ -183,7 +183,9 @@ class App:
         self.keys={};self.candidate=None;self.stable=0
         self.root.after(250,self.tick)
     def scroll_page(self,event):
-        if self.is_minimap() or self.is_packet():return
+        if self.is_minimap():return
+        if self.is_packet():
+            self.packet.canvas.yview_scroll(-int(event.delta/120),'units');return
         canvas=self.fishing.canvas if self.is_fishing() else self.abyss_canvas
         canvas.yview_scroll(-int(event.delta/120),'units')
     def is_fishing(self):
@@ -403,6 +405,13 @@ if __name__=='__main__':
             assert pathlib.Path(packet_zip).is_file()
             from packet_selftest import run_inspection_selftest
             inspected_zip,inspected=run_inspection_selftest(HOME,fixture)
+            from spear_packet_state import run_selftest as spear_state_selftest
+            checked_spear=spear_state_selftest()
+            assert checked_spear['success_observed'] and checked_spear['departure_candidate']
+            assert not checked_spear['game_input_allowed'] and not checked_spear['departure_control_verified']
+            (HOME/'selftest-spear.json').write_text(json.dumps(checked_spear,ensure_ascii=False),encoding='utf-8')
+            inspected['spear']=checked_spear
+            inspected['boss_candidates']=[checked_spear['boss']]
             app.packet.replay_result=inspected
             app.packet.report.set('합성 패킷 ZIP 재생 · 자체 검사')
             app.packet.show_decoded(inspected,historical=True)
@@ -427,7 +436,7 @@ if __name__=='__main__':
                 assert not var.get() and label.cget('text')=='사용 안 함'
                 var.set(True);assert label.cget('text')=='사용 중'
                 var.set(False);assert label.cget('text')=='사용 안 함'
-            (HOME/'selftest.txt').write_text('OK: four GUI tabs, bundled OCR/Brotli, synthetic passive capture, TCP reassembly, candidate decoding, native-pixel evidence and replay/export ZIP. Windows live reception/capture still unverified for this update. No game input sent.',encoding='utf-8')
+            (HOME/'selftest.txt').write_text('OK: four GUI tabs, bundled OCR/Brotli, synthetic passive capture, TCP reassembly, Fire target/marker/impact observer, identity OCR, native evidence/manual-control ZIP and replay. Actual movement/camera calibration remains unverified. No game input sent.',encoding='utf-8')
             app.vision.close();app.fishing.close();app.minimap.close();app.packet.close();app.root.destroy()
         else:app.root.mainloop()
     except Exception:

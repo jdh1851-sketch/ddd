@@ -47,9 +47,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "pc-packet-inspect-build.${{ github.run_number }}"
+          $tag = "pc-spear-state-build.${{ github.run_number }}"
           @'
-          Read-only packet inspection preview based on PC v0.10, not local v0.14.4/v0.14.5. Download Kkullim-PC-0.10.5-packet-inspect.exe. Adds bounded TCP reassembly, version-specific position/spear-boss candidates, ZIP replay and JSON export. Real private capture replay matches independent analysis:1216serverframes,81clientframes,265positionrecords,2bosscandidaterecords;2unknowncompressedmessages remain opaque. This does not verify self identity, element, target, departure signal or mechanic success. No game input is sent. Optional timestamped evidence captures only the existing unobscured coordinate window, bounded to30images/8MiB; player labels may appear. Records exact game-PID TCP16000 connections via existing Npcap for60seconds/12MiB, stopping on connection change. No automatic upload or Mobilay changes. Isolated EXE tests bundled OCR/Brotli, synthetic capture, TCP framing, evidence timing and replay/export ZIP. Actual new live reception/evidence capture is still to be tested on the user PC. F8 starts/stops; F9 stops.
+          Read-only spear observation preview based on PC v0.10, separate from local v0.14.4/v0.14.5. Download Kkullim-PC-0.10.6-spear-state.exe; Python, Tesseract and Korean OCR data are bundled in this single portable EXE.
+
+          Adds recording-scoped self identity from independently timestamped coordinate-window evidence, the observed Fire spear cast and matching shaman position, a marker-detachment candidate, and combined shaman/boss success evidence. The new private replay resolves 7720 server frames, 95 client frames and 422 position records; 20 coordinate matches identify the recorded character. Two opaque compressed messages remain undecoded. Other active spear elements, WASD/camera calibration and automatic early-departure control remain unverified. All game input remains blocked.
+
+          Optional coordinate-window evidence is bounded to 30 native images/8MiB and may include player labels. Optional passive movement evidence records only WASD, mouse buttons and cursor while the exact game PID is foreground; this is calibration evidence, not automatic movement. Packet capture is limited to the game PID's TCP16000 connections, 60seconds/12MiB, and stops on connection change. No automatic upload or Mobilay changes. F8 starts/stops; F9 stops. ZIP replay and analysis JSON export are available.
+
+          Unit tests and an isolated single-EXE selftest verify bundled OCR/Brotli, synthetic capture, identity fail-closed behavior, Fire state transitions and evidence/replay export. Actual new live reception and manual movement calibration still require the user PC. Private packets, labels and addresses are not included in the repository or release.
           '@ | Set-Content release-notes.txt -Encoding utf8
-          gh release create $tag pc/release/* --prerelease --latest=false --target '${{ github.sha }}' --title "Kkullim PC packet inspection preview (build ${{ github.run_number }})" --notes-file release-notes.txt
+          gh release create $tag pc/release/* --prerelease --latest=false --target '${{ github.sha }}' --title "Kkullim PC spear observation 0.10.6 (build ${{ github.run_number }})" --notes-file release-notes.txt
           if ($LASTEXITCODE) { throw 'Release publication failed' }

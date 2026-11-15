@@ -67,7 +67,9 @@ def test_live_display_removes_expired_positions_without_promoting_identity(monke
     assert len(values) == 1 and values[0][0] == 101
     assert values[0][-1] == '2.9초 전'
     assert '실시간 수신' in view.analysis.get()
-    assert '내 캐릭터·현재 속성·이탈 신호·성공: 미확인' in view.analysis.get()
+    assert '내 캐릭터: 미확인' in view.analysis.get()
+    assert '이탈 신호: 미확인' in view.analysis.get()
+    assert '자동이동 차단' in view.analysis.get()
     assert view.last_decoded['game_input_allowed'] is False
 
 
@@ -80,7 +82,9 @@ def test_archive_positions_are_explicitly_historical_and_keep_unknown_mechanics(
     assert list(view.positions.rows.values())[0][-1] == '기록 시점'
     assert '기록 ZIP 재생 · 현재 게임 상태 아님' in view.analysis.get()
     assert '투창병 후보: 900' in view.analysis.get()
-    assert '내 캐릭터·현재 속성·이탈 신호·성공: 미확인' in view.analysis.get()
+    assert '내 캐릭터: 미확인' in view.analysis.get()
+    assert '이탈 신호: 미확인' in view.analysis.get()
+    assert '자동이동 차단' in view.analysis.get()
     assert not replay['self_identity_confirmed'] and not replay['departure_signal_confirmed']
     assert not replay['success_confirmed'] and replay['element'] is None
 
@@ -120,7 +124,7 @@ def test_finished_replay_is_shown_without_starting_a_capture():
     view.poll_replay(2)
     assert view.replay_result == decoded and view.last_decoded == decoded
     assert '재생 완료' in view.report.get() and '게임 입력 차단' in view.report.get()
-    assert '내 위치·정답 위치로 확정한 값이 아닙니다' in view.detail.get()
+    assert '이동 보정·다른 속성·이탈 제어는 검증 전' in view.detail.get()
     assert list(view.positions.rows.values())[0][0] == 321
 
 
@@ -135,7 +139,9 @@ def test_inspector_failure_is_visible_and_removes_previous_candidates(monkeypatc
     assert not view.positions.rows
     assert '해석 중단: RuntimeError: synthetic decoder stopped' in view.analysis.get()
     assert '투창병 후보: 미확인' in view.analysis.get()
-    assert '내 캐릭터·현재 속성·이탈 신호·성공: 미확인' in view.analysis.get()
+    assert '내 캐릭터: 미확인' in view.analysis.get()
+    assert '이탈 신호: 미확인' in view.analysis.get()
+    assert '자동이동 차단' in view.analysis.get()
 
 
 def test_completed_capture_preserves_record_end_analysis_during_late_export(tmp_path, monkeypatch):

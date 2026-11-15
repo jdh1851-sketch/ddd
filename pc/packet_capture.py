@@ -17,6 +17,7 @@ import time
 import uuid
 import zipfile
 from packet_decode import PacketInspector
+from packet_replay import attach_identity
 
 MAX_SECONDS = 60
 MAX_BYTES = 12 * 1024 * 1024
@@ -250,23 +251,26 @@ class PacketCapture:
         self.files=[]
         self.inspector=PacketInspector();self.inspector_error=None
         self.inspector_frozen=None;self.last_packet_epoch=None
+        self.identity_provider=None
 
-    def start(self,pid,seconds=60,max_bytes=MAX_BYTES):
+    def start(self,pid,seconds=60,max_bytes=MAX_BYTES,position_observer=None,reset_observer=None,identity_provider=None):
         if isinstance(pid,bool) or not isinstance(pid,int) or pid<=0:raise ValueError('검증된 게임 PID가 필요합니다.')
         if not 0<float(seconds)<=MAX_SECONDS:raise ValueError('관측 시간은 0초 초과, 60초 이하입니다.')
         if not 24<=int(max_bytes)<=MAX_BYTES:raise ValueError('관측 파일 제한은 24바이트 이상, 12MiB 이하입니다.')
         with self.lock:
             if self.state['running'] or (self.thread and self.thread.is_alive()):raise RuntimeError('이미 패킷 관측 중입니다.')
             self.stop_event=Event();self.files=[];self.started=time.monotonic()
-            self.inspector=PacketInspector();self.inspector_error=None
+            self.inspector=PacketInspector(on_position=position_observer,on_reset=reset_observer);self.inspector_error=None
+            self.identity_provider=identity_provider
             self.inspector_frozen=None;self.last_packet_epoch=None
             session=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ-')+uuid.uuid4().hex[:8]
             directory=self.base_dir/'packet_logs'/session
             self.state=dict(running=True,packets=0,bytes=0,file_bytes=0,elapsed=0.,reason='starting',error=None,
                 session_dir=str(directory),devices=[],pid=pid,filter=None,connections=[],started_at=utc_now(),
                 max_seconds=float(seconds),max_bytes=int(max_bytes),skipped_packets=0,truncated_packets=0,
-                schema_version=2,app_version='0.10.5-packet-inspect',
-                game_input_allowed=False,game_messages_decoded=False,coordinates_decoded=False)
+                schema_version=3,app_version='0.10.6-spear-state',
+                game_input_allowed=False,partial_message_decoding_supported=True,
+                position_candidate_decoding_supported=True,movement_calibration_verified=False)
             self.thread=Thread(target=self._run,daemon=True,name='passive-game-capture')
             self.thread.start()
 
@@ -289,6 +293,8 @@ class PacketCapture:
             frozen=self.inspector_frozen
         result=json.loads(json.dumps(frozen)) if frozen is not None else self.inspector.snapshot()
         result['inspector_error']=self.inspector_error
+        if self.identity_provider:
+            result=attach_identity(result,self.identity_provider())
         return result
 
     def _decoded_file(self):
@@ -390,7 +396,7 @@ class PacketCapture:
                 try:self._metadata();self._decoded_file()
                 except Exception as exc:self._update(error=error or ('로그 저장 실패: '+str(exc)))
 
-    def export(self,destination,evidence=None):
+    def export(self,destination,evidence=None,movement=None):
         with self.lock:
             if self.state['running']:raise RuntimeError('관측을 정지한 뒤 ZIP을 저장하세요.')
             if not self.state['session_dir']:raise ValueError('먼저 패킷 관측을 시작하세요.')
@@ -410,6 +416,14 @@ class PacketCapture:
                             relative=Path(name)
                             if relative.is_absolute() or '..' in relative.parts or not name.startswith('evidence/'):
                                 raise ValueError('잘못된 관찰 증거 파일 경로')
+                            if not Path(source).resolve().is_relative_to(directory.resolve()):
+                                raise ValueError('현재 수신 기록 밖의 파일은 내보내지 않습니다.')
+                            z.write(source,name)
+                    if movement is not None:
+                        for source,name in movement.export_members():
+                            relative=Path(name)
+                            if relative.is_absolute() or '..' in relative.parts or not name.startswith('movement/'):
+                                raise ValueError('잘못된 이동 보정 증거 경로')
                             if not Path(source).resolve().is_relative_to(directory.resolve()):
                                 raise ValueError('현재 수신 기록 밖의 파일은 내보내지 않습니다.')
                             z.write(source,name)
@@ -443,7 +457,8 @@ def run_selftest(base_dir):
     path=Path(base_dir)/'selftest-packets.zip';capture.export(path)
     with zipfile.ZipFile(path) as z:
         metadata=json.loads(z.read('metadata.json'))
-        assert metadata['game_messages_decoded'] is False and metadata['coordinates_decoded'] is False
+        assert metadata['game_input_allowed'] is False and metadata['movement_calibration_verified'] is False
+        assert metadata['partial_message_decoding_supported'] is True
         data=z.read('adapter-00.pcap')
         assert struct.unpack_from('<I',data)[0]==0xa1b2c3d4
         assert struct.unpack_from('<IIII',data,24)[2:]==(len(packet),len(packet))
