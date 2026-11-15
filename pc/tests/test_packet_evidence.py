@@ -108,7 +108,7 @@ def test_unavailable_window_skips_then_recovers_without_stopping_other_work(tmp_
         recorder.close()
     status = recorder.status()
     assert status['skipped'] == 3 and status['window_state'] == 'available'
-    records = [json.loads(line) for line in (tmp_path / 'recover/evidence/events.jsonl').read_text().splitlines()]
+    records = [json.loads(line) for line in (tmp_path / 'recover/evidence/events.jsonl').read_text(encoding='utf-8').splitlines()]
     skipped = [row for row in records if row['event'] == 'skipped']
     assert len(skipped) == 3 and all('가리고' in row['reason'] for row in skipped)
 
