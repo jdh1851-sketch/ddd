@@ -1,7 +1,8 @@
 """Bounded, passive Npcap diagnostics for a verified game's existing TCP connection.
 
 This module observes copies; it has no packet-transmission or game-input API.
-It does not decode game messages, identify the character or decide mechanics.
+Experimental diagnostics read candidate records without identifying self or
+deciding mechanics.
 """
 import ctypes as C
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from threading import Event, RLock, Thread
 import time
 import uuid
 import zipfile
+from packet_decode import PacketInspector
 
 MAX_SECONDS = 60
 MAX_BYTES = 12 * 1024 * 1024
@@ -246,6 +248,8 @@ class PacketCapture:
         self.state=dict(running=False,packets=0,bytes=0,file_bytes=0,elapsed=0.,reason='not_started',error=None,
                         session_dir=None,devices=[],pid=None,filter=None)
         self.files=[]
+        self.inspector=PacketInspector();self.inspector_error=None
+        self.inspector_frozen=None;self.last_packet_epoch=None
 
     def start(self,pid,seconds=60,max_bytes=MAX_BYTES):
         if isinstance(pid,bool) or not isinstance(pid,int) or pid<=0:raise ValueError('검증된 게임 PID가 필요합니다.')
@@ -254,12 +258,14 @@ class PacketCapture:
         with self.lock:
             if self.state['running'] or (self.thread and self.thread.is_alive()):raise RuntimeError('이미 패킷 관측 중입니다.')
             self.stop_event=Event();self.files=[];self.started=time.monotonic()
+            self.inspector=PacketInspector();self.inspector_error=None
+            self.inspector_frozen=None;self.last_packet_epoch=None
             session=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ-')+uuid.uuid4().hex[:8]
             directory=self.base_dir/'packet_logs'/session
             self.state=dict(running=True,packets=0,bytes=0,file_bytes=0,elapsed=0.,reason='starting',error=None,
                 session_dir=str(directory),devices=[],pid=pid,filter=None,connections=[],started_at=utc_now(),
                 max_seconds=float(seconds),max_bytes=int(max_bytes),skipped_packets=0,truncated_packets=0,
-                schema_version=1,app_version='0.10.4-packet-observe',
+                schema_version=2,app_version='0.10.5-packet-inspect',
                 game_input_allowed=False,game_messages_decoded=False,coordinates_decoded=False)
             self.thread=Thread(target=self._run,daemon=True,name='passive-game-capture')
             self.thread.start()
@@ -277,6 +283,19 @@ class PacketCapture:
 
     def _update(self,**fields):
         with self.lock:self.state.update(fields)
+
+    def decoded_snapshot(self):
+        with self.lock:
+            frozen=self.inspector_frozen
+        result=json.loads(json.dumps(frozen)) if frozen is not None else self.inspector.snapshot()
+        result['inspector_error']=self.inspector_error
+        return result
+
+    def _decoded_file(self):
+        directory=Path(self.state['session_dir'])
+        path=directory/'decoded-summary.json';temporary=path.with_suffix('.tmp')
+        temporary.write_text(json.dumps(self.decoded_snapshot(),ensure_ascii=False,indent=2),encoding='utf-8')
+        temporary.replace(path)
 
     def _metadata(self):
         directory=Path(self.state['session_dir']);directory.mkdir(parents=True,exist_ok=True)
@@ -341,10 +360,15 @@ class PacketCapture:
                         if self.state['file_bytes']+16+len(data)>self.state['max_bytes']:
                             reason='byte_limit';return
                         write_pcap_record(stream,sec,usec,data,original)
+                        self.last_packet_epoch=sec+usec/1000000
                         with self.lock:
                             self.state['packets']+=1;self.state['bytes']+=len(data);self.state['file_bytes']+=16+len(data)
                             if original>len(data):self.state['truncated_packets']+=1
                             row['packets']+=1
+                        if self.inspector_error is None:
+                            try:self.inspector.feed(data,link,sec+usec/1000000,source_id=row['file'])
+                            except Exception as exc:
+                                self.inspector_error=f'{type(exc).__name__}: {exc}'[:500]
                 if not got:self.stop_event.wait(.01)
         except Exception as exc:error=f'{type(exc).__name__}: {exc}'[:1000];reason='error'
         finally:
@@ -361,23 +385,34 @@ class PacketCapture:
                 except Exception as exc:error=error or str(exc)
                 with self.lock:row['state']='closed'
             with self.lock:
+                self.inspector_frozen=self.inspector.snapshot(now=self.last_packet_epoch or 0.)
                 self._update(running=False,reason=reason,error=error,elapsed=round(time.monotonic()-self.started,3),finished_at=utc_now())
-                try:self._metadata()
+                try:self._metadata();self._decoded_file()
                 except Exception as exc:self._update(error=error or ('로그 저장 실패: '+str(exc)))
 
-    def export(self,destination):
+    def export(self,destination,evidence=None):
         with self.lock:
             if self.state['running']:raise RuntimeError('관측을 정지한 뒤 ZIP을 저장하세요.')
             if not self.state['session_dir']:raise ValueError('먼저 패킷 관측을 시작하세요.')
             directory=Path(self.state['session_dir']);destination=Path(destination)
             # Refresh running=False in final metadata after worker cleanup.
             self._metadata()
+            self._decoded_file()
             temporary=destination.with_name(destination.name+'.'+uuid.uuid4().hex+'.tmp')
             try:
                 with zipfile.ZipFile(temporary,'w',zipfile.ZIP_DEFLATED) as z:
                     z.write(directory/'metadata.json','metadata.json')
+                    z.write(directory/'decoded-summary.json','decoded-summary.json')
                     for name in self.files:
                         if (directory/name).is_file():z.write(directory/name,name)
+                    if evidence is not None:
+                        for source,name in evidence.export_members():
+                            relative=Path(name)
+                            if relative.is_absolute() or '..' in relative.parts or not name.startswith('evidence/'):
+                                raise ValueError('잘못된 관찰 증거 파일 경로')
+                            if not Path(source).resolve().is_relative_to(directory.resolve()):
+                                raise ValueError('현재 수신 기록 밖의 파일은 내보내지 않습니다.')
+                            z.write(source,name)
                 os.replace(temporary,destination)
                 return destination
             except Exception:

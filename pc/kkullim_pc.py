@@ -76,7 +76,7 @@ class Detector:
 
 class App:
     def __init__(self):
-        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10.4 · 투창 패킷 관찰');self.root.iconbitmap(str(BASE/'app_icon.ico'))
+        self.root=tk.Tk();self.root.title('끌림 매크로 v0.10.5 · 투창 패킷 해석·검증');self.root.iconbitmap(str(BASE/'app_icon.ico'))
         self.user32=u;self.find_game=game_window;self.window_rect=rect;self.home_dir=HOME
         self.root.geometry(f'1000x{min(1100,self.root.winfo_screenheight()-100)}');self.root.minsize(820,650)
         self.root.configure(bg='#f2f5fa');self.root.option_add('*Font',('맑은 고딕',12))
@@ -401,6 +401,11 @@ if __name__=='__main__':
             from packet_capture import run_selftest
             packet_zip=run_selftest(HOME)
             assert pathlib.Path(packet_zip).is_file()
+            from packet_selftest import run_inspection_selftest
+            inspected_zip,inspected=run_inspection_selftest(HOME,fixture)
+            app.packet.replay_result=inspected
+            app.packet.report.set('합성 패킷 ZIP 재생 · 자체 검사')
+            app.packet.show_decoded(inspected,historical=True)
             assert len(app.tabs.tabs())==4
             from threading import Event
             busy=Event();app.vision.submit(lambda:busy.wait(5))
@@ -422,7 +427,7 @@ if __name__=='__main__':
                 assert not var.get() and label.cget('text')=='사용 안 함'
                 var.set(True);assert label.cget('text')=='사용 중'
                 var.set(False);assert label.cget('text')=='사용 안 함'
-            (HOME/'selftest.txt').write_text('OK: four GUI tabs, bundled OCR, OCR diagnostic ZIP, simulated passive packet capture and PCAP ZIP, Windows API initialized. Live game/Npcap capture unverified. No game input sent.',encoding='utf-8')
+            (HOME/'selftest.txt').write_text('OK: four GUI tabs, bundled OCR/Brotli, synthetic passive capture, TCP reassembly, candidate decoding, native-pixel evidence and replay/export ZIP. Windows live reception/capture still unverified for this update. No game input sent.',encoding='utf-8')
             app.vision.close();app.fishing.close();app.minimap.close();app.packet.close();app.root.destroy()
         else:app.root.mainloop()
     except Exception:
